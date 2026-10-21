@@ -1,0 +1,1087 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>FD Ladder Planner</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Schibsted+Grotesk:wght@600;700;800&display=swap">
+<style>
+/* Layout: a treasury desk. Masthead, a summary strip that stays in view, then three working tabs (plan, inputs, validation). Numbers in mono, labels in grotesk. */
+:root{
+  --bg:#F2F5F6; --surface:#FFFFFF; --surface2:#E8EEF0; --ink:#13242A; --ink2:#4A5F66; --line:#D3DDE0;
+  --accent:#0E6B66; --accent-ink:#FFFFFF; --accent-soft:#DDEFED;
+  --good:#1B7F4B; --good-soft:#E1F2E8; --warn:#A5600A; --warn-soft:#FAEBD2; --bad:#B42318; --bad-soft:#FBE4E1;
+  --p0:#0E6B66; --p1:#B4690E; --p2:#5B7C99; --p3:#8A5A83;
+  --font-display:'Schibsted Grotesk',system-ui,sans-serif;
+  --font-body:'IBM Plex Sans',system-ui,sans-serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0D1619; --surface:#142126; --surface2:#1B2C32; --ink:#E3EDEF; --ink2:#9DB3BA; --line:#27393F;
+    --accent:#4DBDB3; --accent-ink:#06211F; --accent-soft:#163A3B;
+    --good:#5CCB8F; --good-soft:#15332A; --warn:#E3A04A; --warn-soft:#3A2B14; --bad:#F07A6E; --bad-soft:#3E1D1A;
+    --p0:#4DBDB3; --p1:#E3A04A; --p2:#8FB0CE; --p3:#C593BD; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0D1619; --surface:#142126; --surface2:#1B2C32; --ink:#E3EDEF; --ink2:#9DB3BA; --line:#27393F;
+  --accent:#4DBDB3; --accent-ink:#06211F; --accent-soft:#163A3B;
+  --good:#5CCB8F; --good-soft:#15332A; --warn:#E3A04A; --warn-soft:#3A2B14; --bad:#F07A6E; --bad-soft:#3E1D1A;
+  --p0:#4DBDB3; --p1:#E3A04A; --p2:#8FB0CE; --p3:#C593BD; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:14px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:22px 64px}
+.wrap{max-width:1120px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+h1,h2,h3{font-family:var(--font-display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+h1{font-size:clamp(28px,4.4vw,40px);font-weight:800;line-height:1.05}
+h2{font-size:18px;font-weight:700}
+h3{font-size:14px;font-weight:700}
+p{margin:0}
+.eyebrow{font-family:var(--font-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink2)}
+.lede{max-width:68ch;color:var(--ink2);margin-top:8px}
+.note{background:var(--surface2);border-left:3px solid var(--accent);padding:10px 14px;color:var(--ink2);font-size:13px;max-width:100%}
+.note.warn{border-color:var(--warn);background:var(--warn-soft);color:var(--ink)}
+.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:1px;background:var(--line);border:1px solid var(--line)}
+.summary>div{background:var(--surface);padding:12px 14px;min-width:0}
+.k{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink2)}
+.v{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:21px;font-weight:500;margin-top:2px}
+.s{font-size:12px;color:var(--ink2);margin-top:2px}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs button{font:600 13px var(--font-display);background:none;border:0;border-bottom:3px solid transparent;color:var(--ink2);padding:10px 14px;cursor:pointer;white-space:nowrap}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.panel{display:flex;flex-direction:column;gap:22px}
+[hidden]{display:none!important}
+.sec{display:flex;flex-direction:column;gap:10px;min-width:0}
+.sec>p{color:var(--ink2);max-width:76ch}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px;min-width:0}
+.scroll{overflow-x:auto}
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);text-align:left;font-weight:500;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.tbl td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+.tbl tr:last-child td{border-bottom:0}
+.tbl .n{font-family:var(--font-mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.tbl th.n{text-align:right}
+.tbl tr.hl td{background:var(--accent-soft)}
+.tbl input,.tbl select,.fld input,.fld select,.add input{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:5px 7px;width:100%;min-width:70px}
+.tbl input[type=checkbox]{width:auto;min-width:0}
+.tbl input[type=number]{font-family:var(--font-mono);text-align:right}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+.fld{display:flex;flex-direction:column;gap:4px;min-width:0}
+.fld label{font-size:12px;color:var(--ink2)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:600 13px var(--font-display);background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:7px 12px;cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.btn.pri{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.sm{padding:3px 8px;font-size:12px}
+.pill{display:inline-block;font-family:var(--font-mono);font-size:11px;padding:2px 7px;border-radius:10px;white-space:nowrap}
+.pill.good{background:var(--good-soft);color:var(--good)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--ink2)}
+.legend i{display:inline-block;width:14px;height:3px;margin-right:6px;vertical-align:middle}
+.ax{fill:var(--ink2);font:11px var(--font-mono)}
+.grid{stroke:var(--line);stroke-width:1}
+.small{font-size:12px;color:var(--ink2)}
+.mono{font-family:var(--font-mono)}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px}
+textarea.csv{width:100%;height:120px;font:11px var(--font-mono);background:var(--surface);color:var(--ink);border:1px solid var(--line)}
+.stick{display:flex;flex-direction:column;gap:6px}
+@media (min-width:900px) and (min-height:720px){.stick{position:sticky;top:env(safe-area-inset-top,0px);z-index:3}:root{scroll-padding-top:340px}}
+.prose{display:flex;flex-direction:column;gap:8px;max-width:76ch}
+.prose ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.defs{display:flex;flex-direction:column;gap:12px;margin:0;max-width:76ch}
+.defs dt{font-weight:600}
+.defs dd{margin:2px 0 0;color:var(--ink2)}
+.sub{display:block;font-size:12px;font-weight:400;color:var(--ink2);margin-top:2px;max-width:46ch;white-space:normal}
+.tbl .n .sub{margin-left:auto}
+.strat th:first-child,.strat td:first-child{min-width:250px}
+.tbl select{min-width:104px}
+select.mode{font:inherit;font-size:12px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:5px 7px;width:auto}
+.note ul{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:2px}
+@media (prefers-reduced-motion:no-preference){.btn{transition:border-color .15s}}
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Treasury desk · fixed deposit ladder</p>
+    <h1>FD Ladder Planner</h1>
+    <p class="lede">Reads the cash forecast, finds the lowest stressed balance inside every holding window, and ladders surplus cash into the best-paying deposits that never touch the safety buffer.</p>
+  </header>
+  <section id="summary" class="summary" aria-live="polite"></section>
+  <noscript><div class="note warn">This planner runs in your web browser and needs JavaScript. Open the file in Chrome, Edge or Firefox. File previews that block scripts show only this header.</div></noscript>
+  <div id="boot"></div>
+  <div id="gap"></div>
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button role="tab" id="b-plan" data-tab="plan" aria-selected="true">FD plan</button>
+    <button role="tab" id="b-inputs" data-tab="inputs" aria-selected="false">Inputs</button>
+    <button role="tab" id="b-validation" data-tab="validation" aria-selected="false">Validation</button>
+  </nav>
+  <main>
+    <div id="tab-plan" class="panel"></div>
+    <div id="tab-inputs" class="panel" hidden></div>
+    <div id="tab-validation" class="panel" hidden></div>
+  </main>
+  <input type="file" id="impFile" accept=".xlsx,.xls,.xlsm,.ods,.csv,.tsv,.txt" hidden>
+</div>
+<script>
+'use strict';
+const DAY = 86400000;
+const KEY = 'fdladder.v1';
+const parseISO = (s) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || '')); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : NaN; };
+const isoOf = (ms) => new Date(ms).toISOString().slice(0, 10);
+const fmtDate = (ms) => new Date(ms).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
+const fL = (x) => { const a = Math.abs(x), s = x < 0 ? '−' : ''; return a >= 100 ? s + '₹' + (a / 100).toFixed(2) + ' Cr' : s + '₹' + a.toFixed(1) + ' L'; };
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function EXAMPLE() {
+  const fd = (days, rate) => ({ on: true, provider: 'ICICI Bank', type: 'FD', days, rate, pen: 1 });
+  const tb = (days, rate) => ({ on: false, provider: 'Govt of India T-Bills', type: 'TBILL', days, rate, pen: 0.1 });
+  return {
+    startDate: '2026-10-14', opening: 1000, buffer: 40, planDays: 365, scenario: 'stress', delay: 0,
+    review: 15, minTicket: 5, lot: 1, tax: 25.17,
+    providers: [{ name: 'ICICI Bank', cap: 0 }, { name: 'Govt of India T-Bills', cap: 0 }],
+    fds: [{ label: 'Existing FD', provider: 'ICICI Bank', amt: 100, rate: 6, start: '2026-07-14', mat: '2027-01-14' }],
+    flows: [
+      { name: 'Operating outflows (salaries, admin, vendors)', type: 'out', amt: 30, pct: 20, days: 'last2', conc: 80, months: 'all' },
+      { name: 'Customer receipts', type: 'in', amt: 10, pct: 20, days: '12-18', conc: 80, months: 'all' }
+    ],
+    inst: [fd(30, 4.5), fd(60, 4.75), fd(91, 5.25), fd(120, 5.5), fd(185, 5.75), fd(271, 6.0), fd(365, 6.25), fd(540, 6.5),
+      tb(91, 5.5747), tb(182, 6.0999), tb(364, 6.2869)]
+  };
+}
+const STAT_ROWS = () => [
+  { name: 'GST payment (GSTR-3B)', type: 'out', amt: 8, pct: 20, days: '20', conc: 100, months: 'all' },
+  { name: 'TDS deposit', type: 'out', amt: 3, pct: 10, days: '7', conc: 100, months: 'all' },
+  { name: 'PF / EPFO', type: 'out', amt: 2.5, pct: 5, days: '15', conc: 100, months: 'all' },
+  { name: 'Advance tax instalment', type: 'out', amt: 25, pct: 10, days: '15', conc: 100, months: '3,6,9,12' },
+  { name: 'Capex and events', type: 'out', amt: 15, pct: 30, days: '20-28', conc: 70, months: '2,5,8,11' }
+];
+
+/* ---------- calendar and events ---------- */
+function buildCal(S) {
+  const s = parseISO(S.startDate); const sd = new Date(s);
+  const first = Date.UTC(sd.getUTCFullYear(), sd.getUTCMonth(), 1);
+  const off = Math.round((s - first) / DAY);
+  const maxT = Math.max(30, ...S.inst.filter((i) => i.on && +i.days > 0).map((i) => Math.min(1100, +i.days)));
+  const N = S.planDays + maxT + 2, M = off + N + 45;
+  const y0 = sd.getUTCFullYear(), m0 = sd.getUTCMonth();
+  const cal = { s, first, off, N, M, m: [], d: [], dim: [], mk: [], wd: [], blocks: {} };
+  for (let i = 0; i < M; i++) {
+    const dt = new Date(first + i * DAY), y = dt.getUTCFullYear(), m = dt.getUTCMonth(), dow = dt.getUTCDay();
+    cal.m[i] = m; cal.d[i] = dt.getUTCDate(); cal.dim[i] = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    cal.mk[i] = (y - y0) * 12 + (m - m0); cal.wd[i] = dow > 0 && dow < 6;
+    (cal.blocks[cal.mk[i]] || (cal.blocks[cal.mk[i]] = [])).push(i);
+  }
+  return cal;
+}
+const isoTok = (t) => /^\d{4}-\d{2}-\d{2}$/.test(t);
+/* A flow is one-time when its freq says so; older rows marked a one-off by putting a date in Days. */
+const isOnce = (f) => f.freq ? f.freq === 'once' : isoTok(String(f.days || '').trim());
+const onceDate = (f) => f.date || (isoTok(String(f.days || '').trim()) ? String(f.days).trim() : '');
+function buildEvents(S, cal) {
+  return S.flows.map((f) => {
+    const ev = [], toks = String(f.days || '').split(',').map((x) => x.trim()).filter(Boolean);
+    const conc = Math.min(100, Math.max(0, +f.conc || 0)) / 100;
+    const ms = String(f.months || 'all').trim().toLowerCase();
+    const mset = (ms === 'all' || ms === '') ? null : new Set(ms.split(/[ ,]+/).map(Number));
+    const push = (i, w, mk) => { const t = i - cal.off; if (t >= 0 && t < cal.N && w > 0) ev.push({ t, w, mk }); };
+    const once = isOnce(f), isos = once ? [onceDate(f)].filter(isoTok) : toks.filter(isoTok);
+    if (once || isos.length) {
+      isos.forEach((t) => { const i = Math.round((parseISO(t) - cal.first) / DAY); if (i >= 0 && i < cal.M) push(i, 1, cal.mk[i]); });
+    } else {
+      const maxMk = cal.mk[cal.M - 1];
+      for (let k = 0; k <= maxMk; k++) {
+        const blk = cal.blocks[k]; if (!blk || !blk.length) continue;
+        if (mset && !mset.has(cal.m[blk[0]] + 1)) continue;
+        const wds = blk.filter((i) => cal.wd[i]); if (!wds.length) continue;
+        const dim = cal.dim[blk[0]], tg = new Set();
+        toks.forEach((tok) => {
+          let mt;
+          if ((mt = tok.match(/^last(\d*)$/i))) { wds.slice(-Math.max(1, +mt[1] || 1)).forEach((i) => tg.add(i)); }
+          else if ((mt = tok.match(/^(\d+)\s*-\s*(\d+)$/))) {
+            const a = +mt[1], b = +mt[2], sel = wds.filter((i) => cal.d[i] >= a && cal.d[i] <= b);
+            if (sel.length) sel.forEach((i) => tg.add(i)); else tg.add(wds.find((i) => cal.d[i] >= a) || wds[wds.length - 1]);
+          } else if (/^\d+$/.test(tok)) {
+            let i = blk[Math.min(+tok, dim) - 1]; while (i < cal.M && !cal.wd[i]) i++; if (i < cal.M) tg.add(i);
+          }
+        });
+        const tl = [...tg], c = tl.length ? conc : 0, wm = new Map();
+        tl.forEach((i) => wm.set(i, (wm.get(i) || 0) + c / tl.length));
+        wds.forEach((i) => wm.set(i, (wm.get(i) || 0) + (1 - c) / wds.length));
+        wm.forEach((w, i) => push(i, w, k));
+      }
+    }
+    return { f, ev };
+  });
+}
+function specFor(name, S) {
+  if (name === 'base') return { outFac: () => 1, inFac: () => 1, delay: 0 };
+  if (name === 'opt') return { outFac: (p) => 1 - p, inFac: (p) => 1 + p, delay: 0 };
+  return { outFac: (p) => 1 + p, inFac: (p) => 1 - p, delay: Math.max(0, Math.round(+S.delay || 0)) };
+}
+function flowsFor(evs, spec, N) {
+  const inF = new Float64Array(N), outF = new Float64Array(N);
+  evs.forEach((c) => {
+    const f = c.f, pct = (+f.pct || 0) / 100, amt = +f.amt || 0, isOut = f.type === 'out';
+    const fac = isOut ? spec.outFac(pct) : spec.inFac(pct), arr = isOut ? outF : inF, sh = isOut ? 0 : (spec.delay || 0);
+    for (const e of c.ev) { const t = e.t + sh; if (t >= 0 && t < N) arr[t] += amt * e.w * fac; }
+  });
+  (spec.extra || []).forEach((x) => { if (x.t >= 0 && x.t < N) (x.type === 'in' ? inF : outF)[x.t] += x.amt; });
+  return { inF, outF };
+}
+function existingMat(S, cal) {
+  const mat = new Float64Array(cal.N);
+  S.fds.forEach((f) => {
+    f.t = null; f.val = null;
+    const st = parseISO(f.start), mt = parseISO(f.mat); if (!isFinite(st) || !isFinite(mt)) return;
+    const T = Math.max(1, Math.round((mt - st) / DAY));
+    f.val = (+f.amt || 0) * Math.pow(1 + (+f.rate || 0) / 400, 4 * T / 365);
+    f.t = Math.round((mt - cal.s) / DAY);
+    if (f.t >= 0 && f.t < cal.N) mat[f.t] += f.val;
+  });
+  return mat;
+}
+function basePath(S, sc, mat) {
+  const N = sc.inF.length, S0 = new Float64Array(N), dip0 = new Float64Array(N); let prev = +S.opening || 0;
+  for (let t = 0; t < N; t++) { const d = prev + mat[t] - sc.outF[t]; dip0[t] = d; prev = d + sc.inF[t]; S0[t] = prev; }
+  return { S0, dip0 };
+}
+
+/* ---------- instruments and planner ---------- */
+const growth = (i, T) => i.type === 'TBILL' ? 1 + i.rate / 100 * T / 365 : Math.pow(1 + i.rate / 400, 4 * T / 365);
+function activeInsts(S, rows) {
+  return (rows || S.inst.filter((i) => i.on)).filter((i) => +i.days > 0 && +i.rate > 0).map((i) => {
+    const days = Math.min(1100, Math.round(+i.days)), o = { provider: i.provider, type: i.type, days, rate: +i.rate, pen: +i.pen || 0 };
+    o.ey = Math.pow(growth(o, days), 365 / days) - 1; o.name = i.provider + ' · ' + days + 'd'; return o;
+  }).sort((a, b) => b.ey - a.ey || a.days - b.days);
+}
+function mkFD(cal, ins, d, x) {
+  const g = growth(ins, ins.days);
+  return { d, m: d + ins.days, T: ins.days, amt: x, gain: x * (g - 1), ins, rate: ins.rate, prov: ins.provider,
+    date: cal.s + d * DAY, mDate: cal.s + (d + ins.days) * DAY };
+}
+const accr = (f, H) => f.gain * Math.min(f.T, Math.max(0, H - f.d)) / f.T;
+function planFDs(S, cal, base, insts) {
+  const N = cal.N, H = S.planDays, dip = Float64Array.from(base.dip0), expo = {}, cap = {}, res = [], pending = new Set();
+  S.providers.forEach((p) => { cap[p.name] = +p.cap || 0; });
+  const ex = (p) => expo[p] || (expo[p] = new Float64Array(N));
+  const wd = (d) => cal.wd[d + cal.off];
+  const nextWD = (d) => { while (d < N && !wd(d)) d++; return d; };
+  S.fds.forEach((f) => {
+    if (f.t == null || !isFinite(f.t)) return;
+    const st = Math.max(0, Math.round((parseISO(f.start) - cal.s) / DAY)), e = ex(f.provider);
+    for (let i = st; i < Math.min(f.t, N); i++) e[i] += +f.amt || 0;
+    if (f.t >= 0 && f.t < H) pending.add(nextWD(f.t));
+  });
+  let last = -1e9;
+  for (let d = 0; d < H; d++) {
+    if (!wd(d)) continue;
+    if (!(pending.has(d) || d - last >= S.review)) continue;
+    last = d;
+    for (const ins of insts) {
+      const m = d + ins.days; if (m >= N) continue;
+      let mn = Infinity, mt = d;
+      for (let t = d; t < m; t++) if (dip[t] < mn) { mn = dip[t]; mt = t; }
+      let L = mn - S.buffer, why = { kind: 'dip', t: mt };
+      const c = cap[ins.provider];
+      if (c > 0) { const e = ex(ins.provider); let mx = 0; for (let t = d; t < m; t++) if (e[t] > mx) mx = e[t]; if (c - mx < L) { L = c - mx; why = { kind: 'cap' }; } }
+      const x = Math.floor(L / S.lot + 1e-9) * S.lot;
+      if (!(x >= S.minTicket)) continue;
+      const f = mkFD(cal, ins, d, x); f.why = why; res.push(f);
+      const e = ex(ins.provider);
+      for (let t = d; t < m; t++) { dip[t] -= x; e[t] += x; }
+      for (let t = m; t < N; t++) dip[t] += f.gain;
+      if (m < H) pending.add(nextWD(m));
+    }
+  }
+  return { fds: res, dip };
+}
+function bestPlan(S, cal, base, insts) {
+  const orders = [insts, insts.slice().sort((a, b) => b.days - a.days), insts.slice().sort((a, b) => a.days - b.days)];
+  [...new Set(insts.map((i) => i.days))].forEach((c) => orders.push(insts.filter((i) => i.days <= c)));
+  let best = null, bt = -1;
+  orders.forEach((o) => { if (!o.length) return; const p = planFDs(S, cal, base, o), t = totals(S, p.fds); if (t.accr > bt + 1e-9) { bt = t.accr; best = p; } });
+  return best || planFDs(S, cal, base, insts);
+}
+function totals(S, fds) {
+  let lock = 0, gain = 0, ac = 0, w = 0, wt = 0;
+  fds.forEach((f) => { lock += f.amt; gain += f.gain; ac += accr(f, S.planDays); w += f.amt * f.T * f.rate; wt += f.amt * f.T; });
+  return { lock, gain, post: gain * (1 - S.tax / 100), accr: ac, wy: wt ? w / wt : 0, n: fds.length };
+}
+
+/* ---------- model ---------- */
+function computeModel(S0) {
+  const S = Object.assign({}, S0, {
+    startDate: isFinite(parseISO(S0.startDate)) ? S0.startDate : isoOf(Math.floor(Date.now() / DAY) * DAY),
+    planDays: Math.max(30, Math.min(730, Math.round(+S0.planDays || 365))), review: Math.max(1, Math.round(+S0.review || 15)),
+    lot: Math.max(0.1, +S0.lot || 1), minTicket: Math.max(0.1, +S0.minTicket || 5), buffer: Math.max(0, +S0.buffer || 0),
+    opening: +S0.opening || 0, tax: Math.min(60, Math.max(0, +S0.tax || 0)), scenario: 'stress'
+  });
+  const cal = buildCal(S), evs = buildEvents(S, cal), mat = existingMat(S, cal);
+  const planSpec = specFor(S.scenario, S), base = basePath(S, flowsFor(evs, planSpec, cal.N), mat);
+  const insts = activeInsts(S), pl = bestPlan(S, cal, base, insts);
+  const M = { S, cal, evs, mat, planSpec, base, insts, pl };
+  M.tot = totals(S, pl.fds);
+  M.ev = evalPlan(M, pl.fds, planSpec);
+  return M;
+}
+function evalPlan(M, fds, spec) {
+  const { S, cal, evs, mat } = M, N = cal.N, sc = flowsFor(evs, spec, N), b = basePath(S, sc, mat), off = new Float64Array(N + 1);
+  fds.forEach((f) => { off[f.d] -= f.amt; if (f.m <= N) off[f.m] += f.amt + f.gain; });
+  const cash = new Float64Array(N), dip = new Float64Array(N); let run = 0, mn = Infinity, mt = 0, mn0 = Infinity, mt0 = 0, mnH = Infinity, caused = Infinity;
+  for (let t = 0; t < N; t++) {
+    run += off[t]; dip[t] = b.dip0[t] + run; cash[t] = b.S0[t] + run;
+    if (dip[t] < mn) { mn = dip[t]; mt = t; }
+    if (t < S.planDays && dip[t] < mnH) mnH = dip[t];
+    caused = Math.min(caused, dip[t] - Math.min(S.buffer, b.dip0[t]));
+    if (b.dip0[t] < mn0) { mn0 = b.dip0[t]; mt0 = t; }
+  }
+  return { cash, dip, minDip: mn, minT: mt, min0: mn0, min0T: mt0, minH: mnH, caused };
+}
+
+/* ---------- validation ---------- */
+function verdict(M, ev) {
+  const { S, cal } = M, dt = (t) => fmtDate(cal.s + t * DAY);
+  if (ev.minDip < -1e-6) return { cls: 'bad', txt: 'Overdrawn by ' + fL(-ev.minDip) + ' on ' + dt(ev.minT) };
+  if (ev.minDip < S.buffer - 1e-6) return { cls: 'warn', txt: 'Buffer short by ' + fL(S.buffer - ev.minDip) + ' on ' + dt(ev.minT) };
+  return { cls: 'good', txt: 'Safe' };
+}
+function strategies(M) {
+  const { S, cal, insts } = M, stress = specFor('stress', S), rows = [];
+  const near = (T) => insts.slice().sort((a, b) => Math.abs(a.days - T) - Math.abs(b.days - T) || b.ey - a.ey)[0];
+  const add = (name, desc, fds, plan) => {
+    const ev = evalPlan(M, fds, stress), t = totals(S, fds);
+    rows.push({ name, desc, plan, n: fds.length, lock: fds.reduce((s, f) => s + (f.d === 0 ? f.amt : 0), 0), accr: t.accr, min: ev.minDip, minT: ev.minT, v: verdict(M, ev) });
+  };
+  add('No new FDs', 'Everything stays in the current account, which earns nothing in this model. This is the liquidity baseline.', [], false);
+  const i365 = near(365), i91 = near(91), room = Math.max(0, S.opening - S.buffer);
+  if (i365) {
+    add('All cash above the buffer in one ~1-year FD', `Opens one deposit today for ${fL(room)} in ${i365.name} at ${i365.rate}%. The money stays locked until maturity.`, room >= S.minTicket ? [mkFD(cal, i365, 0, room)] : [], false);
+    add('Half the balance in one ~1-year FD', `Opens one deposit today for ${fL(S.opening * 0.5)} in ${i365.name} at ${i365.rate}%. The other half stays in the account.`, S.opening * 0.5 >= S.minTicket ? [mkFD(cal, i365, 0, S.opening * 0.5)] : [], false);
+  }
+  if (i91) {
+    const list = []; let x = room, d = 0;
+    while (x >= S.minTicket && d < S.planDays && d + i91.days < cal.N) { const f = mkFD(cal, i91, d, x); list.push(f); x += f.gain; d = f.m; }
+    add('All cash above the buffer in ~3-month FDs, rolled over', `Locks ${fL(room)} in ${i91.name} at ${i91.rate}% and rolls principal plus interest into a new deposit at every maturity until the ${S.planDays}-day horizon ends.`, list, false);
+  }
+  add('Optimised ladder (this tool)', 'The staggered deposits on the FD plan tab. Each amount is capped by the lowest stressed balance inside its holding period.', M.pl.fds, true);
+  return rows;
+}
+function computeVal(M) {
+  return { strat: strategies(M) };
+}
+function csvOf(M) {
+  const rows = [['#', 'Open date', 'Provider', 'Tenure (days)', 'Amount (INR lakh)', 'Rate % p.a.', 'Maturity date', 'Maturity value (INR lakh)', 'Interest (INR lakh)', 'Interest after tax (INR lakh)']];
+  M.pl.fds.forEach((f, i) => rows.push([i + 1, isoOf(f.date), f.prov, f.T, f.amt.toFixed(2), f.rate, isoOf(f.mDate), (f.amt + f.gain).toFixed(2), f.gain.toFixed(2), (f.gain * (1 - M.S.tax / 100)).toFixed(2)]));
+  return rows.map((r) => r.map((c) => /[,"]/.test(c) ? '"' + String(c).replace(/"/g, '""') + '"' : c).join(',')).join('\n');
+}
+
+/* ---------- charts (SVG, sized to the container) ---------- */
+function niceTicks(lo, hi, n) {
+  const span = (hi - lo) || 1, raw = span / n, p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p;
+  const step = (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p, out = [];
+  for (let v = Math.floor(lo / step + 1e-9) * step; out.length < 40; v += step) { out.push(Math.round(v / step) * step); if (v >= hi - step * 1e-6) break; }
+  return out;
+}
+const axL = (v, cr) => cr ? (v / 100).toFixed(2).replace(/\.?0+$/, '') + ' Cr' : Math.round(v) + ' L';
+function monthTicks(M, n, step) {
+  const cal = M.cal, out = [], dm = new Date(cal.s); let y = dm.getUTCFullYear(), m = dm.getUTCMonth() + 1;
+  const every = step || (n > 500 ? 4 : n > 300 ? 3 : n > 150 ? 2 : 1);
+  for (let k = 0; k < 40; k++, m++) {
+    if (m > 11) { m = 0; y++; }
+    const t = Math.round((Date.UTC(y, m, 1) - cal.s) / DAY);
+    if (t >= n) break;
+    if (k % every === 0) out.push({ t, label: new Date(Date.UTC(y, m, 1)).toLocaleDateString('en-GB', { month: 'short', year: '2-digit', timeZone: 'UTC' }) });
+  }
+  return out;
+}
+function cashChart(el, M, pre, h) {
+  const W = Math.max(320, el.clientWidth - 24), H = h || 250, m = { l: 56, r: 12, t: pre ? 30 : 12, b: 26 }, n = Math.min(M.cal.N, M.S.planDays + 60), fds = pre ? [] : M.pl.fds;
+  const sets = [['Optimistic', 'var(--p2)', 'opt', '4 3'], ['Base', 'var(--p0)', 'base', ''], ['Stress', 'var(--p1)', 'stress', '']];
+  const ser = sets.map((s) => ({ name: s[0], c: s[1], d: s[3], v: evalPlan(M, fds, specFor(s[2], M.S)).dip }));
+  let hi = M.S.buffer * 1.5, lo = 0;
+  ser.forEach((s) => { for (let t = 0; t < n; t++) { if (s.v[t] > hi) hi = s.v[t]; if (s.v[t] < lo) lo = s.v[t]; } });
+  const cr = hi >= 100, ticks = niceTicks(lo, hi, 4), top = ticks[ticks.length - 1], bot = ticks[0];
+  const X = (t) => m.l + (W - m.l - m.r) * t / (n - 1), Y = (v) => m.t + (H - m.t - m.b) * (1 - (v - bot) / (top - bot || 1));
+  let g = '';
+  ticks.forEach((v) => { g += `<line class="grid" x1="${m.l}" x2="${W - m.r}" y1="${Y(v)}" y2="${Y(v)}"/><text class="ax" x="${m.l - 6}" y="${Y(v) + 4}" text-anchor="end">${axL(v, cr)}</text>`; });
+  monthTicks(M, n).forEach((k) => { g += `<text class="ax" x="${X(k.t)}" y="${H - 8}" text-anchor="middle">${k.label}</text>`; });
+  g += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(M.S.buffer)}" y2="${Y(M.S.buffer)}" stroke="var(--bad)" stroke-width="1.5" stroke-dasharray="5 4"/>`;
+  g += `<text class="ax" x="${W - m.r}" y="${Y(M.S.buffer) - 5}" text-anchor="end" style="fill:var(--bad)">buffer ${fL(M.S.buffer)}</text>`;
+  if (pre) M.S.fds.forEach((f, i) => {
+    if (f.t == null || f.t < 0 || f.t >= n) return;
+    const x = X(f.t), end = x > W - 130;
+    g += `<line x1="${x}" x2="${x}" y1="${m.t - 6}" y2="${H - m.b}" stroke="var(--good)" stroke-width="1.5" stroke-dasharray="2 3"/>`;
+    g += `<text class="ax" x="${end ? x - 4 : x + 4}" y="${12 + (i % 2) * 12}" text-anchor="${end ? 'end' : 'start'}" style="fill:var(--good)">+${fL(f.val)}</text>`;
+  });
+  ser.forEach((s) => {
+    let d = ''; for (let t = 0; t < n; t++) d += (t ? 'L' : 'M') + X(t).toFixed(1) + ' ' + Y(s.v[t]).toFixed(1);
+    g += `<path d="${d}" fill="none" stroke="${s.c}" stroke-width="${s.name === 'Stress' ? 2.2 : 1.4}" ${s.d ? `stroke-dasharray="${s.d}"` : ''}/>`;
+  });
+  el.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${pre ? 'Lowest daily balance before any new FDs' : 'Lowest daily current account balance after the FD plan'}, three scenarios">${g}</svg>`;
+}
+function fdCaption(M) {
+  const S = M.S, n = Math.min(M.cal.N, S.planDays + 60);
+  if (!S.fds.length) return 'No existing FDs entered.';
+  return S.fds.map((f) => {
+    const nm = esc(f.label || 'FD'), t = f.t;
+    if (t == null) return nm + ': enter valid start and maturity dates.';
+    if (t < 0) return nm + ': matured before the forecast start, so it adds no inflow.';
+    if (t >= n) return nm + ': matures on ' + fmtDate(parseISO(f.mat)) + ', after the chart window.';
+    return nm + ': ' + fL(+f.amt) + ' returns ' + fL(f.val) + ' on ' + fmtDate(parseISO(f.mat)) + '.';
+  }).join(' ');
+}
+function ladderChart(el, M) {
+  const fds = M.pl.fds.slice(0, 60), W = Math.max(320, el.clientWidth - 24), rh = 18, m = { l: 8, r: 12, t: 4, b: 24 };
+  const H = m.t + m.b + rh * Math.max(1, fds.length), n = Math.min(M.cal.N, Math.max(M.S.planDays, ...fds.map((f) => f.m)) + 5);
+  const X = (t) => m.l + (W - m.l - m.r) * t / n, provs = M.S.providers.map((p) => p.name);
+  let g = '';
+  monthTicks(M, n, Math.max(2, Math.ceil(56 / ((W - m.l - m.r) / (n / 30.44))))).forEach((k) => { g += `<line class="grid" x1="${X(k.t)}" x2="${X(k.t)}" y1="${m.t}" y2="${H - m.b}"/><text class="ax" x="${X(k.t)}" y="${H - 8}" text-anchor="${X(k.t) < 30 ? 'start' : X(k.t) > W - 30 ? 'end' : 'middle'}">${k.label}</text>`; });
+  g += `<line x1="${X(M.S.planDays)}" x2="${X(M.S.planDays)}" y1="${m.t}" y2="${H - m.b}" stroke="var(--ink2)" stroke-dasharray="3 3"/>`;
+  fds.forEach((f, i) => {
+    const y = m.t + i * rh + 2, x0 = X(f.d), w = Math.max(3, X(f.m) - x0), col = `var(--p${Math.max(0, provs.indexOf(f.prov)) % 4})`;
+    const lab = fL(f.amt) + ' · ' + f.rate + '%', fits = w > 120;
+    g += `<rect x="${x0}" y="${y}" width="${w}" height="${rh - 5}" rx="2" fill="${col}"/>`;
+    g += fits ? `<text x="${x0 + 5}" y="${y + 10}" style="fill:var(--surface);font:11px var(--font-mono)">${lab}</text>`
+      : `<text class="ax" x="${Math.min(x0 + w + 5, W - 120)}" y="${y + 10}">${lab}</text>`;
+  });
+  el.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Ladder of planned deposits from opening date to maturity">${g}</svg>`;
+}
+/* ---------- renderers ---------- */
+const scnName = { base: 'Base', stress: 'Stress', opt: 'Optimistic' };
+function renderSummary(M) {
+  const { S, tot, ev, cal } = M, dt = (t) => fmtDate(cal.s + t * DAY);
+  const today = M.pl.fds.filter((f) => f.d === 0).reduce((s, f) => s + f.amt, 0);
+  const ok = ev.caused >= -1e-6;
+  document.getElementById('summary').innerHTML =
+    `<div><div class="k">Deposits placed</div><div class="v">${tot.n}</div><div class="s">${fL(today)} on day one, ${fL(tot.lock)} in total after reinvesting maturities</div></div>
+     <div><div class="k">Interest accrued, next ${S.planDays} days</div><div class="v">${fL(tot.accr)}</div><div class="s">${fL(tot.accr * (1 - S.tax / 100))} after ${S.tax}% tax. ${fL(tot.gain)} at maturity of every deposit</div></div>
+     <div><div class="k">Weighted yield</div><div class="v">${tot.wy.toFixed(2)}%</div><div class="s">Planned against the ${scnName[S.scenario].toLowerCase()} forecast</div></div>
+     <div><div class="k">Lowest ${scnName[S.scenario].toLowerCase()} balance</div><div class="v">${fL(ev.minH)}</div><div class="s"><span class="pill ${ok ? 'good' : 'bad'}">${ok ? 'Plan adds no breach' : 'Plan breaches buffer'}</span> buffer ${fL(S.buffer)}</div></div>`;
+  const gap = ev.min0 < S.buffer - 1e-6;
+  let ft = 0; if (gap) { const d0 = M.base.dip0; for (let t = 0; t < d0.length; t++) if (d0[t] < S.buffer - 1e-6) { ft = t; break; } }
+  const fixes = ['bring in ' + fL(S.buffer - ev.min0) + ' more by then', 'cut outflows'];
+  if (ev.min0 > 0) fixes.push('lower the buffer to ' + fL(ev.min0) + ' or less');
+  const fixTxt = fixes.slice(0, -1).join(', ') + ' or ' + fixes[fixes.length - 1];
+  document.getElementById('gap').innerHTML = gap ? `<div class="note warn"><b>Funding gap.</b> Under stress, with no new FDs, the account first drops below the ${fL(S.buffer)} buffer on ${dt(ft)} and bottoms out at ${fL(ev.min0)} on ${dt(ev.min0T)}, ${fL(S.buffer - ev.min0)} short of the buffer. No deposit plan can create that cash, so the stress line dips below the buffer on those dates. The planner places no deposit that overlaps the shortfall. To clear it, ${fixTxt}.</div>` : '';
+}
+function renderPlan(M) {
+  const { S, pl } = M, el = document.getElementById('tab-plan'), pc = (n) => `var(--p${Math.max(0, S.providers.findIndex((p) => p.name === n)) % 4})`;
+  const rows = pl.fds.map((f, i) => {
+    return `<tr><td class="n">${i + 1}</td><td>${fmtDate(f.date)}</td><td><span style="color:${pc(f.prov)}">■</span> ${esc(f.prov)} · ${f.T}d</td><td class="n">${fL(f.amt)}</td><td class="n">${f.rate.toFixed(2)}%</td><td>${fmtDate(f.mDate)}</td><td class="n">${fL(f.amt + f.gain)}</td><td class="n">${fL(f.gain)}</td><td class="n">${fL(f.gain * (1 - S.tax / 100))}</td></tr>`;
+  }).join('');
+  el.innerHTML = `
+  <div class="sec"><h2>FDs to open</h2>
+    <p>Each row is one deposit. Day-one deposits form the ladder; later rows reinvest maturities and any cash the forecast frees up.</p>
+    <div class="card scroll"><table class="tbl"><thead><tr><th class="n">#</th><th>Open date</th><th>Instrument</th><th class="n">Amount</th><th class="n">Rate</th><th>Maturity</th><th class="n">Maturity value</th><th class="n">Interest</th><th class="n">After tax</th></tr></thead><tbody>${rows || '<tr><td colspan="9" class="small">No deposit fits: the stressed balance never leaves room above the buffer. Check the opening balance, buffer and flows in Inputs.</td></tr>'}</tbody></table></div>
+    <div class="row"><button class="btn pri" data-act="csv">Copy as CSV</button><span class="small" id="csvmsg"></span></div>
+    <div id="csvbox"></div>
+  </div>
+  <div class="sec"><h2>Cash forecast before any new FDs</h2>
+    <p>Lowest balance on each day with the current account and existing FDs only. A dotted green line marks the day an existing FD pays back, with the amount returned. Edit an FD in Inputs and this chart moves with it.</p>
+    <div class="legend"><span><i style="background:var(--p1)"></i>Stress</span><span><i style="background:var(--p0)"></i>Base</span><span><i style="background:var(--p2)"></i>Optimistic</span><span><i style="background:var(--bad)"></i>Buffer</span><span><i style="background:var(--good)"></i>Existing FD pays back</span></div>
+    <div class="card" id="chFwd"></div><p class="small">${fdCaption(M)}</p></div>
+  <div class="sec"><h2>Current account after the plan</h2>
+    <p>Lowest balance on each day once the new deposits are in place. The planner puts cash back into FDs as soon as it is free, so these lines stay close to the buffer and the returned FD money shows up as new deposits. The planner protects the stress line, so it stays at or above the buffer unless the cash is not there to hold it. A funding gap notice appears above when that happens.</p>
+    <div class="legend"><span><i style="background:var(--p1)"></i>Stress</span><span><i style="background:var(--p0)"></i>Base</span><span><i style="background:var(--p2)"></i>Optimistic</span><span><i style="background:var(--bad)"></i>Buffer</span></div>
+    <div class="card" id="chCash"></div></div>
+  <div class="sec"><h2>Deposit ladder</h2>
+    <p>Bars run from opening to maturity. The dashed line marks the end of the ${S.planDays}-day planning window.${pl.fds.length > 60 ? ' Showing the first 60 deposits.' : ''}</p>
+    <div class="legend">${S.providers.map((p, i) => `<span><i style="background:var(--p${i % 4})"></i>${esc(p.name)}</span>`).join('')}</div>
+    <div class="card scroll" id="chLad"></div></div>`;
+  cashChart(document.getElementById('chFwd'), M, true); cashChart(document.getElementById('chCash'), M); ladderChart(document.getElementById('chLad'), M);
+}
+function renderValidation(M) {
+  const el = document.getElementById('tab-validation'), S = M.S, cal = M.cal;
+  if (!M.val) M.val = computeVal(M);
+  const rows = M.val.strat, plan = rows.find((r) => r.plan), alts = rows.filter((r) => !r.plan);
+  const bestSafe = alts.filter((r) => r.v.cls === 'good').reduce((a, r) => (!a || r.accr > a.accr ? r : a), null);
+  const paper = alts.filter((r) => r.v.cls !== 'good' && r.accr > plan.accr + 1e-6);
+  const lc = (s) => s.charAt(0).toLowerCase() + s.slice(1), planOk = plan.v.cls === 'good';
+  const head = [], tail = []; let trouble = !planOk;
+  const room = plan.min - S.buffer, eps = 0.05;
+  if (plan.n === 0) { trouble = true; head.push(`The ladder opens no deposits, so it earns nothing. Either no rate row is ticked in Inputs, or the stressed balance leaves no room above the ${fL(S.buffer)} buffer.`); }
+  else if (planOk) head.push(`The ladder earns ${fL(plan.accr)}. Its lowest stressed balance is ${fL(plan.min)} against a buffer of ${fL(S.buffer)}${room < 2 ? ', so it uses the cash right down to the safety line and no further' : ', which leaves ' + fL(room) + ' of headroom'}.`);
+  else head.push(`The ladder fails this test (${esc(lc(plan.v.txt))}). The account is short even with no new FDs, so no deposit plan can pass. The ladder only avoids making the shortfall worse.`);
+  if (bestSafe && plan.n > 0) {
+    const d = plan.accr - bestSafe.accr;
+    if (d > eps) head.push(`Among the other strategies that stay safe, the best is "${esc(bestSafe.name)}" at ${fL(bestSafe.accr)}. The ladder earns ${fL(d)} more${bestSafe.accr > 0.05 ? ' (' + Math.round(d / bestSafe.accr * 100) + '% more)' : ''}.`);
+    else if (d < -eps) { trouble = true; head.push(`A safe strategy, "${esc(bestSafe.name)}", earns ${fL(-d)} more than the ladder (${fL(bestSafe.accr)}). The ladder search missed it, so check the rate rows and settings in Inputs before relying on the plan.`); }
+    else head.push(`"${esc(bestSafe.name)}" is safe and earns about the same (${fL(bestSafe.accr)}).`);
+  } else if (!bestSafe) head.push(planOk ? 'No other strategy stays safe under stress, so the ladder is the only usable plan in this table.' : 'No other strategy stays safe under stress either.');
+  if (planOk && !trouble) tail.push('No strategy in this table earns more than the ladder and stays safe. That is the sense in which it is the maximum.');
+  const wins = paper.map((r) => `<li><b>${esc(r.name)}</b> shows ${fL(r.accr)} on paper, ${fL(r.accr - plan.accr)} more than the ladder. Under stress its verdict is "${esc(r.v.txt)}", so that extra interest cannot be collected.</li>`).join('');
+  const body = rows.map((r) => `<tr${r.plan ? ' class="hl"' : ''}><td><b>${esc(r.name)}</b><span class="sub">${esc(r.desc)}</span></td><td class="n">${r.n}</td><td class="n">${fL(r.lock)}</td><td class="n">${r.v.cls === 'good' ? fL(r.accr) : '<span class="small">' + fL(r.accr) + '<span class="sub">not usable</span></span>'}</td><td class="n">${fL(r.min)}<span class="sub">on ${fmtDate(cal.s + r.minT * DAY)}</span></td><td><span class="pill ${r.v.cls}">${esc(r.v.txt)}</span></td></tr>`).join('');
+  const st = specFor('stress', S);
+  const stressList = S.flows.map((f) => { const p = (+f.pct || 0) / 100, a = +f.amt || 0, v = a * (f.type === 'out' ? st.outFac(p) : st.inFac(p)); return `<li>${esc(f.name)}: ${fL(a)} becomes ${fL(v)} per occurrence (${f.type === 'out' ? 'outflow raised' : 'receipt cut'} by ${+f.pct || 0}%).</li>`; }).join('');
+  el.innerHTML = `
+  <div class="sec"><h2>Is this the most it can earn?</h2>
+    <p>This test puts the ladder next to simpler ways of using the same cash and replays all of them against the stress forecast. A strategy counts only if the current account stays at or above the buffer on every day. The ladder is the maximum when nothing else in the table earns more and stays safe.</p></div>
+  <div class="sec"><h3>Ladder against other strategies, under stress</h3>
+    <div class="card scroll"><table class="tbl strat"><thead><tr><th>Strategy</th><th class="n">Deposits</th><th class="n">Locked day one</th><th class="n">Interest</th><th class="n">Lowest balance</th><th>Verdict</th></tr></thead><tbody>${body}</tbody></table></div>
+    <div class="note${trouble ? ' warn' : ''}"><div class="prose"><b>Reading this result</b>${head.map((s) => '<p>' + s + '</p>').join('')}${wins ? '<p>Strategies that look better on paper but fail the test:</p><ul>' + wins + '</ul>' : ''}${tail.map((s) => '<p>' + s + '</p>').join('')}</div></div></div>
+  <div class="sec"><h3>What stress means for your inputs</h3>
+    <div class="prose"><p>The ladder is built on the stress forecast, and every strategy in the table is replayed on it. Each outflow is raised by its own ± band and each receipt is cut by its own band${+S.delay ? ', and receipts also arrive ' + Math.round(+S.delay) + ' days late' : ''}. With your current rows:</p>
+    <ul>${stressList || '<li>No flows entered.</li>'}</ul></div></div>
+  <div class="sec"><h3>What each column means</h3>
+    <dl class="defs">
+      <div><dt>Deposits</dt><dd>How many separate FDs the strategy opens, counting every rollover. The ladder opens more because it reinvests each maturity and spreads cash over several tenures.</dd></div>
+      <div><dt>Locked day one</dt><dd>Principal placed today. A bigger number is not better on its own. It shows how much of the opening cash the strategy commits before it knows what the next months bring.</dd></div>
+      <div><dt>Interest</dt><dd>Interest accrued inside the ${S.planDays}-day planning horizon, before tax. A deposit that runs past the horizon is credited only for the days inside it, so long FDs get no credit for later interest. Rolled-over deposits earn interest on interest. A strategy that fails the verdict still shows its figure, in grey, so you can see what it promised on paper.</dd></div>
+      <div><dt>Lowest balance</dt><dd>The lowest the current account gets on any day, with that strategy's deposits locked, your existing FDs paying back on their dates and the stressed flows applied. The window runs past the planning horizon, to the end of the longest deposit, so a deposit opened late is tested through its maturity. A negative figure means the account would be overdrawn. The date shown is the day of that low.</dd></div>
+      <div><dt>Verdict</dt><dd>Safe when the lowest balance is at least the buffer (${fL(S.buffer)}). Buffer short when it sits between zero and the buffer. Overdrawn when it falls below zero. The label names the size of the shortfall and the day it happens.</dd></div>
+    </dl></div>
+  <div class="sec"><h3>What this test shows, and what it cannot</h3>
+    <div class="prose"><ul>
+      <li>It compares the ladder with a handful of common rules of thumb. Passing shows the ladder beats them and stays safe. It does not prove that no better plan exists. The ladder comes from a search that tries several orderings of tenures, and an exact optimiser such as a linear program would settle the question.</li>
+      <li>The current account earns nothing in this model, interest is before tax, and no deposit is broken early, so no break penalty is charged.</li>
+      <li>The one-year and three-month strategies use the ticked instrument closest to that tenure, so a change to a rate row moves those rows as well as the ladder.</li>
+      <li>To test a change, edit an inflow, an outflow, the buffer or a rate in Inputs and come back. Every row is recalculated, and the reading above tells you whether the ladder still leads.</li></ul></div></div>`;
+}
+
+/* ---------- inputs ---------- */
+let S = EXAMPLE(), M = null, tab = 'plan', timer = null;
+const $ = (id) => document.getElementById(id);
+function fld(t, i, k, v, o) {
+  o = o || {};
+  const id = t + '-' + i + '-' + k, a = `id="${id}" data-t="${t}" data-i="${i}" data-k="${k}"`;
+  if (o.sel) return `<select ${a}>${o.sel.map((x) => `<option value="${esc(x[0])}"${String(x[0]) === String(v) ? ' selected' : ''}>${esc(x[1])}</option>`).join('')}</select>`;
+  if (o.chk) return `<input type="checkbox" ${a}${v ? ' checked' : ''} aria-label="${o.al || k}">`;
+  if (o.num) return `<input type="number" ${a} data-n="1" step="${o.step || 'any'}" value="${v}" aria-label="${o.al || k}">`;
+  return `<input type="${o.type || 'text'}" ${a} value="${esc(v)}" aria-label="${o.al || k}">`;
+}
+function buildInputs() {
+  const provSel = S.providers.map((p) => [p.name, p.name]);
+  const sf = (k, label, o) => `<div class="fld"><label for="S-0-${k}">${label}</label>${fld('S', 0, k, S[k], o)}</div>`;
+  const fdRows = S.fds.map((f, i) => `<tr><td>${fld('fds', i, 'label', f.label, { al: 'FD label' })}</td><td>${fld('fds', i, 'provider', f.provider, { sel: provSel })}</td><td>${fld('fds', i, 'amt', f.amt, { num: 1, al: 'amount' })}</td><td>${fld('fds', i, 'rate', f.rate, { num: 1, step: '0.01', al: 'rate' })}</td><td>${fld('fds', i, 'start', f.start, { type: 'date', al: 'start date' })}</td><td>${fld('fds', i, 'mat', f.mat, { type: 'date', al: 'maturity date' })}</td><td><button class="btn sm" data-act="del" data-t="fds" data-i="${i}" aria-label="Remove FD">Remove</button></td></tr>`).join('');
+  const flRows = S.flows.map((f, i) => {
+    const once = isOnce(f), past = once && parseISO(onceDate(f)) < parseISO(S.startDate);
+    const timing = once
+      ? `<td>${fld('flows', i, 'date', onceDate(f), { type: 'date', al: 'date' })}</td><td colspan="2" class="small">${past ? 'Before the forecast start, so it has no effect' : 'Happens once, on this date'}</td>`
+      : `<td>${fld('flows', i, 'days', f.days, { al: 'days' })}</td><td>${fld('flows', i, 'conc', f.conc, { num: 1, al: 'concentration' })}</td><td>${fld('flows', i, 'months', f.months, { al: 'months' })}</td>`;
+    return `<tr><td>${fld('flows', i, 'name', f.name, { al: 'name' })}</td><td>${fld('flows', i, 'type', f.type, { sel: [['out', 'Outflow'], ['in', 'Inflow']] })}</td><td>${fld('flows', i, 'freq', once ? 'once' : 'monthly', { sel: [['monthly', 'Monthly'], ['once', 'One time']] })}</td><td>${fld('flows', i, 'amt', f.amt, { num: 1, al: 'amount' })}</td><td>${fld('flows', i, 'pct', f.pct, { num: 1, al: 'variation' })}</td>${timing}<td><button class="btn sm" data-act="del" data-t="flows" data-i="${i}" aria-label="Remove flow">Remove</button></td></tr>`;
+  }).join('');
+  const imp = (what) => { const m = impMsg[what]; return m ? `<div class="note${m.cls ? ' ' + m.cls : ''}" role="status">${m.html}${impUndo && impUndo.what === what ? ' <button class="btn sm" data-act="undo">Undo import</button>' : ''}</div>` : ''; };
+  const mode = (what) => `<label class="small" for="imode-${what}">Imported rows</label><select class="mode" id="imode-${what}" data-imode="${what}"><option value="replace"${impMode[what] === 'replace' ? ' selected' : ''}>replace the table</option><option value="add"${impMode[what] === 'add' ? ' selected' : ''}>add to the table</option></select>`;
+  const impRow = (what, label) => `<div class="row"><button class="btn" data-act="imp" data-what="${what}">${label}</button><button class="btn sm" data-act="tpl" data-what="${what}">Download as Excel template</button>${what === 'cash' ? '' : mode(what)}</div>`;
+  const inRows = S.inst.map((r, i) => `<tr><td>${fld('inst', i, 'on', r.on, { chk: 1, al: 'use' })}</td><td>${fld('inst', i, 'provider', r.provider, { sel: provSel })}</td><td>${fld('inst', i, 'type', r.type, { sel: [['FD', 'Bank FD'], ['TBILL', 'T-bill / G-sec']] })}</td><td>${fld('inst', i, 'days', r.days, { num: 1, al: 'tenure' })}</td><td>${fld('inst', i, 'rate', r.rate, { num: 1, step: '0.0001', al: 'rate' })}</td><td>${fld('inst', i, 'pen', r.pen, { num: 1, step: '0.05', al: 'penalty' })}</td><td><button class="btn sm" data-act="del" data-t="inst" data-i="${i}" aria-label="Remove instrument">Remove</button></td></tr>`).join('');
+  const prRows = S.providers.map((p, i) => `<tr><td>${esc(p.name)}</td><td>${fld('providers', i, 'cap', p.cap, { num: 1, al: 'cap' })}</td></tr>`).join('');
+  $('tab-inputs').innerHTML = `
+  <div class="card stick"><h3>Live forecast, before any new FDs</h3><div class="legend"><span><i style="background:var(--p1)"></i>Stress</span><span><i style="background:var(--p0)"></i>Base</span><span><i style="background:var(--p2)"></i>Optimistic</span><span><i style="background:var(--bad)"></i>Buffer</span><span><i style="background:var(--good)"></i>Existing FD pays back</span></div><div id="chPrev"></div><p class="small" id="prevCap"></p></div>
+  <div class="sec"><h2>Cash position and settings</h2><p>All amounts are in ₹ lakh (100 lakh = 1 crore). Your changes save in this browser.</p>
+    <div class="card"><div class="fields">
+      ${sf('startDate', 'Forecast starts on', { type: 'date' })}${sf('opening', 'Current account balance (₹ L)', { num: 1 })}${sf('buffer', 'Safety buffer (₹ L)', { num: 1 })}
+      
+      ${sf('delay', 'Receipts late by (days), stress', { num: 1 })}${sf('planDays', 'Planning horizon (days)', { num: 1 })}${sf('review', 'Review every (days)', { num: 1 })}
+      ${sf('minTicket', 'Smallest deposit (₹ L)', { num: 1 })}${sf('lot', 'Deposit rounding (₹ L)', { num: 1 })}${sf('tax', 'Tax on interest (%)', { num: 1 })}</div>
+      <div class="row" style="margin-top:12px"><button class="btn" data-act="bufmonth">Set buffer to one month of stressed outflows</button><button class="btn" data-act="reset">Reset to assignment example</button></div></div>
+    ${impRow('cash', 'Import cash position from Excel')}
+    <p class="small">The sheet can list labels with a value beside or below them, such as <span class="mono">Opening balance | 10,00,00,000</span>, <span class="mono">As of | 14-10-2026</span> or <span class="mono">Minimum balance | 40 L</span>. It can also be a bank statement with Date and Balance columns, and then the latest balance is used. Amounts in rupees, lakh or crore are converted to lakh. Excel (.xlsx, .xls), OpenDocument (.ods) and CSV files work.</p>
+    ${imp('cash')}</div>
+  <div class="sec"><h2>Existing fixed deposits</h2><p>Maturity value is computed with quarterly compounding from the start date. Maturities return to the current account on their date.</p>
+    <div class="card scroll"><table class="tbl"><thead><tr><th>Label</th><th>Provider</th><th class="n">Amount (₹ L)</th><th class="n">Rate %</th><th>Opened</th><th>Matures</th><th></th></tr></thead><tbody>${fdRows}</tbody></table></div>
+    <div class="row"><button class="btn" data-act="addfd">Add FD</button></div>
+    ${impRow('fds', 'Import FDs from Excel')}
+    <p class="small">Use a header row such as FD number, Bank, Principal, Rate, Start date and Maturity date. A Tenure column (days, months or years) can stand in for either date. With no rate column, the rate is worked out from a Maturity value column. FDs that mature before the forecast starts are skipped, and new bank names are added under Providers.</p>
+    ${imp('fds')}</div>
+  <div class="sec"><h2>Inflows and outflows</h2><p>Amount is per occurrence. A monthly row repeats every month. Its Days accept <span class="mono">last2</span>, ranges like <span class="mono">12-18</span> or single days like <span class="mono">7</span>. Concentration is the share of the amount that lands on those days, and the rest spreads over working days. Months is <span class="mono">all</span> or a list like <span class="mono">3,6,9,12</span>. A one-time row happens once, on its date, such as a capex payment, a loan drawdown or a large customer receipt.</p>
+    <div class="card scroll"><table class="tbl"><thead><tr><th>Event</th><th>Type</th><th>Repeats</th><th class="n">Amount (₹ L)</th><th class="n">± %</th><th>Days or date</th><th class="n">Concentrated %</th><th>Months</th><th></th></tr></thead><tbody>${flRows}</tbody></table></div>
+    <div class="row"><button class="btn" data-act="addflow">Add monthly event</button><button class="btn" data-act="addonce">Add one-time event</button><button class="btn" data-act="addstat">Add statutory and capex examples</button></div>
+    ${impRow('flows', 'Import inflows and outflows from Excel')}
+    <p class="small">Two layouts work. The first is a list with columns such as Description, Type (Inflow or Outflow), Amount, Frequency, Date, Days, Months and ± %. Separate Receipts and Payments (or Credit and Debit) columns also work. A row with a date and no frequency becomes a one-time event. Quarterly and yearly rows recur in the months their date implies. The second is a month-by-month forecast with months across the top. A line with the same amount every month becomes a monthly row. Otherwise each month becomes a one-time event on the 15th.</p>
+    ${imp('flows')}
+    <p class="small">The statutory examples (GST, TDS, PF, advance tax, capex) are placeholder amounts. If you itemise outflows, lower the aggregate operating row so nothing is counted twice.</p></div>
+  <div class="sec"><h2>Rates for banks and government securities</h2><p>Tick the rows the planner may use. Rates are % p.a. Penalty is the cost of breaking early. ICICI rows are placeholders inside its published 2.75–6.50% band, so copy the live card before relying on the output. T-bill rows hold the RBI cut-off yields of 7 Oct 2026 (91, 182 and 364 days).</p>
+    <div class="card scroll"><table class="tbl"><thead><tr><th>Use</th><th>Provider</th><th>Kind</th><th class="n">Tenure (days)</th><th class="n">Rate %</th><th class="n">Break penalty %</th><th></th></tr></thead><tbody>${inRows}</tbody></table></div>
+    <div class="row"><button class="btn" data-act="addinst">Add instrument</button></div></div>
+  <div class="sec"><h2>Providers and concentration limits</h2><p>Cap is the most that may sit with one provider at any time. Leave 0 for no cap.</p>
+    <div class="card scroll"><table class="tbl"><thead><tr><th>Provider</th><th class="n">Cap (₹ L)</th></tr></thead><tbody>${prRows}</tbody></table></div>
+    <div class="row add"><div class="fld"><label for="newProv">New provider name</label><input id="newProv" type="text" placeholder="e.g. HDFC Bank"></div><button class="btn" data-act="addprov" style="align-self:flex-end">Add provider</button></div></div>`;
+}
+
+/* ---------- spreadsheet import ----------
+   Sheets are read into rows of cells. Columns are found by matching header text, so the
+   user's own column names work. Amounts become lakh, dates become ISO, percentages become %. */
+const XLSX_URL = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+const impMsg = {}, impMode = { fds: 'replace', flows: 'replace' };
+let xlsxP = null, impWhat = null, impUndo = null;
+function loadXLSX() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  if (!xlsxP) xlsxP = new Promise((res, rej) => {
+    const s = document.createElement('script'); s.src = XLSX_URL;
+    s.onload = () => (window.XLSX ? res(window.XLSX) : rej(new Error('load')));
+    s.onerror = () => { xlsxP = null; rej(new Error('load')); };
+    document.head.appendChild(s);
+  });
+  return xlsxP;
+}
+function parseCSV(text) {
+  text = text.replace(/^﻿/, '');
+  const first = text.split(/\r?\n/).find((l) => l.trim()) || '', cnt = (ch) => first.split(ch).length - 1;
+  const dl = [',', ';', '\t'].sort((a, b) => cnt(b) - cnt(a))[0], rows = [];
+  let row = [], cur = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; continue; }
+    if (c === '"') q = true;
+    else if (c === dl) { row.push(cur); cur = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(cur); rows.push(row); row = []; cur = ''; }
+    else cur += c;
+  }
+  if (cur || row.length) { row.push(cur); rows.push(row); }
+  return rows.map((r) => r.map((v) => (v.trim() === '' ? null : v.trim()))).filter((r) => r.some((v) => v != null));
+}
+async function readSheets(file) {
+  if (/\.(csv|tsv|txt)$/i.test(file.name)) return [{ name: file.name, rows: parseCSV(await file.text()) }];
+  const X = await loadXLSX(), wb = X.read(new Uint8Array(await file.arrayBuffer()), { type: 'array', cellDates: true });
+  return wb.SheetNames.map((n) => ({ name: n, rows: X.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: null, blankrows: false }) }));
+}
+
+const MON = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+const txt = (v) => (v == null || v instanceof Date ? '' : String(v).trim());
+const normH = (v) => (typeof v === 'string' ? v.toLowerCase().replace(/[\s_.:()\[\]\/\\'’-]+/g, ' ').trim() : '');
+function ymd(y, m, d) {
+  if (y < 100) y += 2000;
+  const ms = Date.UTC(y, m - 1, d), t = new Date(ms);
+  return y > 1990 && y < 2100 && t.getUTCMonth() === m - 1 && t.getUTCDate() === d ? isoOf(ms) : '';
+}
+function cellDate(v) {
+  if (v instanceof Date) { const ms = v.getTime() - v.getTimezoneOffset() * 60000; return isFinite(ms) ? isoOf(Math.round(ms / DAY) * DAY) : ''; }
+  if (typeof v === 'number') return v > 25000 && v < 75000 ? isoOf(Date.UTC(1899, 11, 30) + Math.round(v) * DAY) : '';
+  const s = txt(v).toLowerCase(); let m;
+  if ((m = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})\b/))) return ymd(+m[1], +m[2], +m[3]);
+  if ((m = s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2}|\d{4})\b/))) { let a = +m[1], b = +m[2]; if (b > 12 && a <= 12) [a, b] = [b, a]; return ymd(+m[3], b, a); }
+  if ((m = s.match(/^(\d{1,2})(?:st|nd|rd|th)?[\s\-\/.,]*([a-z]{3})[a-z]*\.?[\s\-\/.,']*(\d{2}|\d{4})$/))) { const i = MON.indexOf(m[2]); return i < 0 ? '' : ymd(+m[3], i + 1, +m[1]); }
+  if ((m = s.match(/^([a-z]{3})[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})$/))) { const i = MON.indexOf(m[1]); return i < 0 ? '' : ymd(+m[3], i + 1, +m[2]); }
+  return '';
+}
+/* Column heading that names a month: a date cell, "Oct-26", "October 2026" or "2026-10". */
+function monthHead(v) {
+  if (v instanceof Date) { const d = cellDate(v); return d ? { iso: d, only: d.slice(8) === '01' } : null; }
+  const s = txt(v).toLowerCase(); let m;
+  if (!s || typeof v === 'number') return null;
+  if ((m = s.match(/^([a-z]{3})[a-z]*\.?[\s\-\/'’,]*(\d{2}|\d{4})$/)) && MON.includes(m[1])) { const d = ymd(+m[2], MON.indexOf(m[1]) + 1, 1); return d ? { iso: d, only: true } : null; }
+  if ((m = s.match(/^(\d{4})[-\/](\d{1,2})$/))) { const d = ymd(+m[1], +m[2], 1); return d ? { iso: d, only: true } : null; }
+  const d = cellDate(v); return d ? { iso: d, only: false } : null;
+}
+function cellNum(v) {
+  if (typeof v === 'number') return isFinite(v) ? { n: v, u: '' } : null;
+  const s = txt(v).toLowerCase(); if (!s || cellDate(s)) return null;
+  const m = s.replace(/,/g, '').match(/-?\d*\.?\d+/); if (!m) return null;
+  let n = +m[0];
+  if (/^\(.*\)$/.test(s) || /\bdr\.?$/.test(s) || /^[₹\s]*(rs\.?|inr)?\s*-/.test(s)) n = -Math.abs(n);
+  const rest = s.replace(/,/g, '').replace(m[0], ' ');
+  const u = /%/.test(rest) ? '%' : /\b(cr|crs|crore|crores)\b/.test(rest) ? 'cr' : /\b(l|lac|lacs|lakh|lakhs|lk)\b/.test(rest) ? 'l'
+    : /\b(mn|million)\b/.test(rest) ? 'mn' : /\b(k|thousand)\b/.test(rest) ? 'k' : '';
+  return { n, u };
+}
+const headUnit = (h) => /\b(cr|crs|crore|crores)\b/.test(h) ? 'cr' : /\b(l|lac|lacs|lakh|lakhs)\b/.test(h) ? 'l' : /\b(mn|million|millions)\b/.test(h) ? 'mn'
+  : /\b(000s?|thousands?)\b/.test(h) ? 'k' : /\b(rs|inr|rupees?)\b|₹/.test(h) ? 'rs' : '';
+const UNIT = { cr: 100, l: 1, mn: 10, k: 0.01, rs: 1e-5 };
+/* Unit order: the cell's own word, then the column heading, then size (₹1 lakh or more as a bare number is rupees). */
+const toL = (c, colU, big) => { const u = c.u && c.u !== '%' ? c.u : colU; return Math.round(c.n * (UNIT[u] || (big ? 1e-5 : 1)) * 100) / 100; };
+const unitWord = (u, big) => ({ cr: 'crore', l: 'lakh', mn: 'million', k: 'thousand', rs: 'rupees' }[u] || (big ? 'rupees (no unit given, judged by size)' : 'lakh (no unit given)'));
+function pctOf(v) { const c = cellNum(v); if (!c) return null; return c.u === '%' ? c.n : (typeof v === 'number' && v !== 0 && Math.abs(v) <= 1) ? Math.round(v * 1e6) / 1e4 : c.n; }
+const isTotal = (row) => row.slice(0, 3).some((v) => /^(grand |sub ?)?total\b|^net\b/.test(normH(v)));
+
+/* Finds the header row whose cells match the most fields. spec: { field: [match, exclude] }, earlier fields claim a column first. */
+function findTable(sheets, spec, must) {
+  let best = null;
+  sheets.forEach((sh) => {
+    for (let r = 0; r < Math.min(sh.rows.length, 30); r++) {
+      const row = sh.rows[r] || [], map = {}, used = new Set();
+      Object.keys(spec).forEach((k) => {
+        const [re, not] = spec[k];
+        for (let c = 0; c < row.length; c++) {
+          const h = normH(row[c]);
+          if (!used.has(c) && h && h.length <= 60 && re.test(h) && !(not && not.test(h))) { map[k] = c; used.add(c); break; }
+        }
+      });
+      const sc = Object.keys(map).length;
+      if (sc >= 2 && must(map) && (!best || sc > best.sc)) best = { sheet: sh.name, rows: sh.rows, r, map, sc, head: row };
+    }
+  });
+  return best;
+}
+const colInfo = (T, k) => {
+  const c = T.map[k], u = headUnit(normH(T.head[c]));
+  const big = !u && T.rows.slice(T.r + 1).some((row) => { const x = row && cellNum(row[c]); return x && !x.u && Math.abs(x.n) >= 1e5; });
+  return { u, big };
+};
+const mapList = (T, names) => '<ul>' + Object.keys(T.map).filter((k) => names[k]).sort((a, b) => T.map[a] - T.map[b]).map((k) => `<li>${names[k]} ← “${esc(txt(T.head[T.map[k]]))}”</li>`).join('') + '</ul>';
+const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
+const was = (n) => (n === 1 ? 'was' : 'were');
+
+/* Cash position: label-value pairs anywhere in the workbook, or a statement with Date and Balance columns. */
+const CASH_SPEC = [
+  ['minTicket', 'Smallest deposit', /smallest deposit|min(imum)? ?(deposit|ticket|fd|investment|placement)/],
+  ['lot', 'Deposit rounding', /round|lot ?size|multiples? of|denomination/],
+  ['buffer', 'Safety buffer', /buffer|min(imum)? ?(balance|cash|bal)|safety|cushion|floor|reserve/],
+  ['delay', 'Receipts late by', /late|delay/],
+  ['review', 'Review every', /review/],
+  ['planDays', 'Planning horizon', /horizon|planning (period|days|window)|forecast (period|days|window)/],
+  ['tax', 'Tax on interest', /tax/],
+  ['opening', 'Current account balance', /balance|cash ?(in hand|position|available|at bank)|current account|available (cash|funds)|^cash$|funds available/, /min|buffer|target|interest|fd|deposit|loan/],
+  ['startDate', 'Forecast starts on', /as ?(of|on|at)|^dated?$|position date|balance date|forecast start|start date|reporting date|valuation date|^on$/]
+];
+function importCash(sheets) {
+  const got = {}, from = {};
+  const st = findTable(sheets, { date: [/date/], bal: [/balance|closing|running/, /opening|min|buffer/] }, (m) => m.date != null && m.bal != null);
+  if (st) {
+    let best = null, n = 0;
+    const bu = colInfo(st, 'bal');
+    st.rows.slice(st.r + 1).forEach((row) => { const d = cellDate(row[st.map.date]), c = cellNum(row[st.map.bal]); if (d && c) { n++; if (!best || d >= best.d) best = { d, c }; } });
+    if (best && n >= 2) {
+      got.opening = toL(best.c, bu.u, bu.big); got.startDate = best.d;
+      from.opening = from.startDate = `latest row of the statement on sheet “${esc(st.sheet)}” (${n} dated rows)`;
+    }
+  }
+  const parse = (k, h, v) => {
+    if (k === 'startDate') return cellDate(v) || null;
+    if (k === 'tax') { const p = pctOf(v); return p != null && p >= 0 && p <= 60 ? p : null; }
+    const c = cellNum(v); if (!c) return null;
+    if (k === 'opening' || k === 'buffer' || k === 'minTicket' || k === 'lot') { const x = toL(c, headUnit(h), !c.u && Math.abs(c.n) >= 1e5); return k === 'opening' || x >= 0 ? x : null; }
+    let n = c.n; const w = h + ' ' + txt(v).toLowerCase();
+    if (k === 'planDays') n = /year/.test(w) ? n * 365 : /month/.test(w) ? Math.round(n * 365 / 12) : n;
+    return n >= 0 ? Math.round(n) : null;
+  };
+  sheets.forEach((sh) => sh.rows.forEach((row, r) => (row || []).forEach((v, c) => {
+    const h = normH(v); if (!h || h.length > 70) return;
+    const hit = CASH_SPEC.find(([k, , re, not]) => !(k in got) && re.test(h) && !(not && not.test(h)));
+    if (!hit) return;
+    const k = hit[0], cands = [];
+    for (let j = c + 1; j < row.length; j++) if (row[j] != null && (row[j] instanceof Date || txt(row[j]) !== '')) { cands.push(row[j]); break; }
+    const below = (sh.rows[r + 1] || [])[c]; if (below != null) cands.push(below);
+    for (const val of cands) { const x = parse(k, h, val); if (x != null) { got[k] = x; from[k] = `“${esc(txt(v))}” on sheet “${esc(sh.name)}”`; break; } }
+  })));
+  const keys = CASH_SPEC.map((x) => x[0]).filter((k) => k in got);
+  if (!keys.length) return { ok: false, html: 'No cash position found. Label each value in the cell to its left or above it, for example <span class="mono">Opening balance</span>, <span class="mono">As of</span>, <span class="mono">Minimum balance</span>. Or use a statement with Date and Balance columns.' };
+  if (got.planDays != null) got.planDays = Math.max(30, Math.min(730, got.planDays));
+  if (got.review != null) got.review = Math.max(1, got.review);
+  keys.forEach((k) => { S[k] = got[k]; });
+  const show = (k) => k === 'startDate' ? fmtDate(parseISO(got[k])) : k === 'tax' ? got[k] + '%' : /^(opening|buffer|minTicket|lot)$/.test(k) ? fL(got[k]) : got[k] + ' days';
+  const missing = ['opening', 'startDate', 'buffer'].filter((k) => !(k in got)).map((k) => CASH_SPEC.find((x) => x[0] === k)[1].toLowerCase());
+  return { ok: true, warn: missing.length > 0, html: `<b>Updated ${plural(keys.length, 'field')}.</b><ul>${keys.map((k) => `<li>${CASH_SPEC.find((x) => x[0] === k)[1]}: ${show(k)}, from ${from[k]}</li>`).join('')}</ul>${missing.length ? '<p>Not found in the file, left as before: ' + missing.join(', ') + '.</p>' : ''}` };
+}
+
+/* Existing FDs: one row per deposit under a header row. */
+const FD_SPEC = {
+  matv: [/matur\w* ?(amount|amt|value|proceeds)|redemption ?(amount|value)/],
+  mat: [/matur|due ?date|end ?date|expiry|redemption ?date/, /amount|amt|value|proceeds|interest|instruction/],
+  start: [/(start|open|opened|opening|book|booking|placement|value|issue|invest|investment|deposit|effective) ?(date|dt|on)\b|^(start|opened|from|date)$|date of (deposit|investment|booking|opening|issue)/, /matur/],
+  days: [/tenure|term|period|days|duration/, /date|rate/],
+  rate: [/rate|roi|yield|coupon|% ?p ?a|interest ?%|^int ?%/, /amount|amt|value|date|payout|freq|type/],
+  provider: [/bank|provider|issuer|institution|counterparty|lender/, /account|a c|ifsc|number|no$|branch|date|code/],
+  label: [/label|fd ?(no|number|id|ref|a c|account)|deposit ?(no|number|id|ref|account)|receipt ?(no|number)|account ?(no|number)|reference|ref ?no|^name$|description|^id$|particulars/],
+  amt: [/principal|amount|amt|deposit ?value|invested|face ?value|book ?value|^value|^sum|balance/, /matur|interest|date|rate|%/]
+};
+const FD_NAMES = { label: 'Label', provider: 'Provider', amt: 'Amount', rate: 'Rate', start: 'Opened', mat: 'Matures', days: 'Tenure', matv: 'Maturity value (used for missing rates)' };
+function importFDs(sheets) {
+  const T = findTable(sheets, FD_SPEC, (m) => m.amt != null && (m.mat != null || m.days != null));
+  if (!T) return { ok: false, html: 'No FD table found. The sheet needs a header row with at least an amount column (Principal, Amount) and a Maturity date or Tenure column.' };
+  const g = (row, k) => (T.map[k] == null ? null : row[T.map[k]]), au = colInfo(T, 'amt'), mvu = T.map.matv != null ? colInfo(T, 'matv') : au;
+  const dh = T.map.days != null ? normH(T.head[T.map.days]) : '', s0 = parseISO(S.startDate), provs = S.providers.slice(), out = [];
+  let skipped = 0, matured = 0, noStart = 0, fromMV = 0, noRate = 0;
+  const provName = (n) => {
+    if (!n) return provs[0] ? provs[0].name : 'Bank';
+    const hit = provs.find((p) => p.name.toLowerCase() === n.toLowerCase()); if (hit) return hit.name;
+    provs.push({ name: n, cap: 0 }); return n;
+  };
+  T.rows.slice(T.r + 1).forEach((row) => {
+    if (!row || isTotal(row)) { skipped++; return; }
+    const a = cellNum(g(row, 'amt')); if (!a || !(a.n > 0)) { skipped++; return; }
+    const amt = toL(a, au.u, au.big);
+    let start = cellDate(g(row, 'start')), mat = cellDate(g(row, 'mat'));
+    const dc = cellNum(g(row, 'days')), dw = dh + ' ' + txt(g(row, 'days')).toLowerCase();
+    const days = dc ? Math.round(/year/.test(dw) ? dc.n * 365 : /month/.test(dw) ? dc.n * 365 / 12 : dc.n) : 0;
+    if (!mat && start && days > 0) mat = isoOf(parseISO(start) + days * DAY);
+    if (mat && !start && days > 0) start = isoOf(parseISO(mat) - days * DAY);
+    if (!mat) { skipped++; return; }
+    if (parseISO(mat) <= s0) { matured++; return; }
+    if (!start) { start = S.startDate; noStart++; }
+    let rate = pctOf(g(row, 'rate'));
+    if (!(rate > 0)) {
+      const mv = cellNum(g(row, 'matv')), T2 = (parseISO(mat) - parseISO(start)) / DAY;
+      if (mv && T2 > 0) { const v = toL(mv, mvu.u, mvu.big); if (v > amt) { rate = Math.round(400 * (Math.pow(v / amt, 365 / (4 * T2)) - 1) * 100) / 100; fromMV++; } }
+    }
+    if (!(rate > 0)) { rate = 0; noRate++; }
+    const provider = provName(txt(g(row, 'provider')));
+    out.push({ label: txt(g(row, 'label')) || provider + ' FD ' + (out.length + 1), provider, amt, rate, start, mat });
+  });
+  if (!out.length) return { ok: false, html: `Found an FD table on sheet “${esc(T.sheet)}”, but no row had both an amount and a maturity date after ${fmtDate(s0)}.${matured ? ' ' + plural(matured, 'row') + ' had already matured.' : ''}` };
+  const added = provs.slice(S.providers.length).map((p) => p.name);
+  S.providers = provs; S.fds = impMode.fds === 'add' ? S.fds.concat(out) : out;
+  const notes = [];
+  if (matured) notes.push(`${plural(matured, 'FD')} matured on or before ${fmtDate(s0)} and ${was(matured)} left out, since that cash is already in the balance.`);
+  if (skipped) notes.push(`${plural(skipped, 'row')} had no usable amount or maturity date (totals, blanks or headings) and ${was(skipped)} skipped.`);
+  if (noStart) notes.push(`${plural(noStart, 'FD')} had no start date, so ${fmtDate(s0)} was used. The maturity value is understated until you enter the real date.`);
+  if (fromMV) notes.push(`${plural(fromMV, 'rate')} worked out from the maturity value.`);
+  if (noRate) notes.push(`${plural(noRate, 'FD')} had no rate and show 0%. Enter the rate so the maturity value includes interest.`);
+  if (added.length) notes.push('New providers added: ' + added.map(esc).join(', ') + '.');
+  return { ok: true, warn: noRate > 0 || noStart > 0, html: `<b>${impMode.fds === 'add' ? 'Added' : 'Imported'} ${plural(out.length, 'FD')} from sheet “${esc(T.sheet)}”.</b> Amounts read as ${unitWord(au.u, au.big)}.${mapList(T, FD_NAMES)}${notes.map((s) => '<p>' + s + '</p>').join('')}` };
+}
+
+/* Inflows and outflows: a list of events, or a grid with months across the top. */
+const FLOW_SPEC = {
+  date: [/^date\b|(txn|transaction|value|payment|due|expected|event|posting|receipt|cash) ?date|^on$|date of/, /start|end|matur/],
+  freq: [/freq|recurr|repeat|occurr|periodicity|one ?time|how often|schedule/],
+  type: [/^type\b|flow ?type|direction|^in ?out|nature|^dr ?cr$|^cr ?dr$|credit ?debit|debit ?credit|inflow ?outflow|receipt ?payment/],
+  pct: [/±|\+|plus ?minus|variation|variance|band|uncertain|tolerance|swing/],
+  conc: [/concentrat|share on|weight/],
+  days: [/^days?\b|day of (the )?month|timing|which days|pattern|when in (the )?month/, /date|%/],
+  months: [/^months?\b|which months|applicable months|in months/],
+  inAmt: [/inflow|receipt|credit|^cr\b|deposits?\b|income|collection|money in|^in\b/, /date|type|%|band|variation|days?$/],
+  outAmt: [/outflow|payment|debit|^dr\b|withdrawal|expense|spend|money out|^out\b/, /date|type|%|band|variation|days?$/],
+  amt: [/amount|amt|value|^sum|^inr|^rs|₹|lakh|crore|^total/, /%|band|variation|date/],
+  name: [/event|description|^name|particular|narration|item|category|head|details|remarks|purpose|payee|party|line/, /date|type|amount/]
+};
+const FLOW_NAMES = { name: 'Event', type: 'Type', freq: 'Repeats', amt: 'Amount', inAmt: 'Inflow amount', outAmt: 'Outflow amount', pct: '± %', date: 'Date', days: 'Days', conc: 'Concentrated %', months: 'Months' };
+const typeOf = (v) => { const s = txt(v).toLowerCase(); return /^(in|inflow|receipts?|credit|cr|income|\+|collection|money in)\b/.test(s) ? 'in' : /^(out|outflow|payments?|debit|dr|expense|-|money out)\b/.test(s) ? 'out' : ''; };
+const sectionType = (s) => { s = String(s).toLowerCase(); return /receipt|inflow|collection|income|cash in|revenue|sales|refund|dividend|interest (received|income)|grant|subsidy/.test(s) ? 'in' : /payment|outflow|expense|cash out|disburse|expenditure|spend/.test(s) ? 'out' : ''; };
+const freqOf = (s) => { s = s.toLowerCase(); return /once|one ?time|one ?off|single|ad ?hoc|non ?recurr|lump|bullet/.test(s) ? 'once' : /quarter/.test(s) ? 'q' : /half ?year|semi/.test(s) ? 'h' : /annual|year/.test(s) ? 'y' : /fortnight|bi ?week/.test(s) ? 'f' : /week/.test(s) ? 'w' : /daily|every ?day/.test(s) ? 'd' : /month/.test(s) ? 'monthly' : ''; };
+function normDays(v) {
+  if (typeof v === 'number') return v >= 1 && v <= 31 ? String(Math.round(v)) : '';
+  let s = txt(v).toLowerCase(); if (!s || /^(all|any|spread|even|every ?day|throughout)/.test(s)) return '';
+  s = s.replace(/(\d+)(st|nd|rd|th)\b/g, '$1').replace(/\s*(to|–|—|until|till)\s*/g, '-').replace(/\band\b|&|;/g, ',');
+  return s.split(',').map((t) => { let m; t = t.trim(); if ((m = t.match(/last\s*(\d*)/))) return 'last' + (m[1] && m[1] !== '1' ? m[1] : ''); if ((m = t.match(/(\d{1,2})\s*-\s*(\d{1,2})/))) return m[1] + '-' + m[2]; if ((m = t.match(/^(\d{1,2})\b/))) return m[1]; return ''; }).filter(Boolean).join(',');
+}
+function normMonths(v) {
+  if (typeof v === 'number') return v >= 1 && v <= 12 ? String(v) : 'all';
+  const s = txt(v).toLowerCase(); if (!s || /all|every|monthly/.test(s)) return 'all';
+  if (/quarter/.test(s)) return '3,6,9,12';
+  const out = []; s.split(/[\s,;\/&]+|\band\b/).forEach((t) => { const n = +t, i = MON.indexOf(t.slice(0, 3)); if (n >= 1 && n <= 12) out.push(n); else if (i >= 0) out.push(i + 1); });
+  return out.length ? [...new Set(out)].sort((a, b) => a - b).join(',') : 'all';
+}
+const everyN = (m, step) => { const o = []; for (let k = 0; k < 12; k += step) o.push((m - 1 + k) % 12 + 1); return o.sort((a, b) => a - b).join(','); };
+function findGrid(sheets) {
+  let best = null;
+  sheets.forEach((sh) => {
+    for (let r = 0; r < Math.min(sh.rows.length, 30); r++) {
+      const cols = (sh.rows[r] || []).map((v, c) => ({ c, h: monthHead(v) })).filter((x) => x.h);
+      if (cols.length >= 3 && (!best || cols.length > best.cols.length)) best = { sheet: sh.name, rows: sh.rows, r, cols };
+    }
+  });
+  return best;
+}
+function gridFlows(G, out, info) {
+  const c0 = G.cols[0].c, head = G.rows[G.r] || [];
+  const tc = head.findIndex((v, c) => c < c0 && FLOW_SPEC.type[0].test(normH(v)));
+  const ctx = G.rows.slice(0, G.r + 1).flat().map(normH).join(' ');
+  const u = headUnit(ctx), signed = G.rows.slice(G.r + 1).some((row) => G.cols.some((x) => { const n = row && cellNum(row[x.c]); return n && n.n < 0; }));
+  const big = !u && G.rows.slice(G.r + 1).some((row) => G.cols.some((x) => { const n = row && cellNum(row[x.c]); return n && !n.u && Math.abs(n.n) >= 1e5; }));
+  let cur = '';
+  G.rows.slice(G.r + 1).forEach((row) => {
+    if (!row) return;
+    const name = row.slice(0, c0).map(txt).filter((s) => s && !cellNum(s)).join(' · ');
+    const vals = G.cols.map((x) => ({ x, n: cellNum(row[x.c]) })).filter((o) => o.n && o.n.n);
+    if (!vals.length) { const t = sectionType(name); if (t) cur = t; return; }
+    if (/total|\bnet\b|opening|closing|balance|surplus|deficit|cumulative|carried|brought/.test(name.toLowerCase())) { info.skipped++; return; }
+    const base = (tc >= 0 && typeOf(row[tc])) || sectionType(name) || cur;
+    const typed = vals.map((o) => ({ ...o, t: o.n.n < 0 ? 'out' : base || (signed ? 'in' : 'out'), a: Math.abs(toL(o.n, u, big)) }));
+    const label = name || 'Grid row';
+    if (typed.length === G.cols.length && typed.every((o) => o.t === typed[0].t && Math.abs(o.a - typed[0].a) <= 0.01 * typed[0].a)) {
+      out.push({ name: label, type: typed[0].t, freq: 'monthly', date: '', amt: typed[0].a, pct: 10, days: '', conc: 0, months: 'all' }); info.monthly++; info.pct++;
+    } else typed.forEach((o) => {
+      const date = o.x.h.only ? o.x.h.iso.slice(0, 8) + '15' : o.x.h.iso;
+      out.push({ name: label + ' · ' + new Date(parseISO(o.x.h.iso)).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' }), type: o.t, freq: 'once', date, amt: o.a, pct: 10, days: '', conc: 100, months: 'all' });
+      info.once++; info.pct++; if (o.x.h.only) info.mid++;
+    });
+  });
+  info.unit = unitWord(u, big);
+}
+function listFlows(T, out, info) {
+  const g = (row, k) => (T.map[k] == null ? null : row[T.map[k]]), units = {};
+  ['amt', 'inAmt', 'outAmt'].forEach((k) => { if (T.map[k] != null) units[k] = colInfo(T, k); });
+  info.unit = Object.values(units).map((x) => unitWord(x.u, x.big)).filter((v, i, a) => a.indexOf(v) === i).join(' / ');
+  T.rows.slice(T.r + 1).forEach((row, idx) => {
+    if (!row || isTotal(row)) { info.skipped++; return; }
+    const name = txt(g(row, 'name')) || 'Imported row ' + (T.r + idx + 2), amts = [];
+    ['inAmt', 'outAmt'].forEach((k) => { const c = cellNum(g(row, k)); if (c && c.n) amts.push([k === 'inAmt' ? 'in' : 'out', c, units[k]]); });
+    if (!amts.length && T.map.amt != null) { const c = cellNum(g(row, 'amt')); if (c && c.n) amts.push([typeOf(g(row, 'type')) || (c.n < 0 ? 'out' : '') || sectionType(name) || 'out', c, units.amt]); }
+    if (!amts.length) { info.skipped++; return; }
+    let fq = freqOf(txt(g(row, 'freq'))), date = cellDate(g(row, 'date')), days = '';
+    const dc = g(row, 'days');
+    if (typeof dc !== 'number' && /\d{4}|[a-z]{3}/i.test(txt(dc)) && cellDate(dc)) { if (!date) date = cellDate(dc); } else days = normDays(dc);
+    if (!fq) fq = date && !days ? 'once' : 'monthly';
+    if (fq === 'once' && !date) { info.noDate++; return; }
+    let months = T.map.months != null && txt(g(row, 'months')) ? normMonths(g(row, 'months')) : 'all', mult = 1;
+    const dm = date ? +date.slice(5, 7) : 0;
+    if (fq !== 'once' && date && !days && /^(monthly|q|h|y)$/.test(fq)) days = String(+date.slice(8));
+    if (fq === 'q' && months === 'all') months = dm ? everyN(dm, 3) : '3,6,9,12';
+    if (fq === 'h' && months === 'all') months = dm ? everyN(dm, 6) : '3,9';
+    if (fq === 'y' && months === 'all') { months = dm ? String(dm) : '3'; if (!dm) info.yearGuess++; }
+    if (fq === 'f') mult = 2; else if (fq === 'w') mult = 52 / 12; else if (fq === 'd') mult = 21.7;
+    if (mult !== 1) { days = ''; info.scaled++; }
+    let pct = T.map.pct != null ? pctOf(g(row, 'pct')) : null;
+    if (pct == null) { pct = fq === 'once' ? 0 : 10; info.pct++; }
+    let conc = T.map.conc != null ? pctOf(g(row, 'conc')) : null;
+    if (conc == null) conc = days ? 100 : 0;
+    amts.forEach(([t, c, cu]) => {
+      const once = fq === 'once';
+      out.push({ name: amts.length > 1 ? name + (t === 'in' ? ' (in)' : ' (out)') : name, type: t, freq: once ? 'once' : 'monthly', date: once ? date : '',
+        amt: Math.round(Math.abs(toL(c, cu.u, cu.big)) * mult * 100) / 100, pct: Math.max(0, pct), days: once ? '' : days, conc: Math.min(100, Math.max(0, conc)), months: once ? 'all' : months });
+      if (once) info.once++; else info.monthly++;
+    });
+  });
+}
+function importFlows(sheets) {
+  const out = [], info = { skipped: 0, monthly: 0, once: 0, pct: 0, mid: 0, noDate: 0, scaled: 0, yearGuess: 0, unit: '' };
+  const G = findGrid(sheets), T = G ? null : findTable(sheets, FLOW_SPEC, (m) => m.amt != null || m.inAmt != null || m.outAmt != null);
+  if (!G && !T) return { ok: false, html: 'No inflows or outflows found. Use a header row with an Amount column (or Receipts and Payments columns) and a Description column, or a forecast with months across the top.' };
+  if (G) gridFlows(G, out, info); else listFlows(T, out, info);
+  if (!out.length) return { ok: false, html: `Found a table on sheet “${esc((G || T).sheet)}”, but no row had a usable amount.` };
+  S.flows = impMode.flows === 'add' ? S.flows.concat(out) : out;
+  const s0 = parseISO(S.startDate), past = out.filter((f) => f.freq === 'once' && parseISO(f.date) < s0).length, notes = [];
+  if (past) notes.push(`${plural(past, 'one-time event')} fall before the forecast start (${fmtDate(s0)}) and have no effect. Past transactions belong in the opening balance.`);
+  if (info.mid) notes.push(`${plural(info.mid, 'amount')} ${was(info.mid)} given for a month with no day, so ${info.mid === 1 ? 'it was' : 'they were'} placed on the 15th. Edit the dates where timing matters.`);
+  if (info.pct) notes.push(`${plural(info.pct, 'row')} had no ± column, so ${G ? 'each got ±10%' : 'recurring rows got ±10% and one-time rows 0%'}. The stress forecast uses this band, so set it to how uncertain each amount really is.`);
+  if (info.noDate) notes.push(`${plural(info.noDate, 'one-time row')} had no date and ${was(info.noDate)} skipped.`);
+  if (info.scaled) notes.push(`${plural(info.scaled, 'weekly, fortnightly or daily row')} converted to a monthly amount spread over working days.`);
+  if (info.yearGuess) notes.push(`${plural(info.yearGuess, 'yearly row')} had no date, so March was assumed.`);
+  if (info.skipped) notes.push(`${plural(info.skipped, 'row')} skipped (totals, balances, headings or blank amounts).`);
+  if (impMode.flows === 'add') notes.push('Added to the existing rows. If the file already covers an existing row, remove one of them so nothing is counted twice.');
+  const how = G ? `month-by-month forecast on sheet “${esc(G.sheet)}” (${G.cols.length} month columns)` : `sheet “${esc(T.sheet)}”`;
+  return { ok: true, warn: past > 0 || info.noDate > 0, html: `<b>${impMode.flows === 'add' ? 'Added' : 'Imported'} ${plural(out.length, 'row')} from ${how}:</b> ${info.monthly} monthly, ${info.once} one-time. Amounts read as ${info.unit}.${T ? mapList(T, FLOW_NAMES) : ''}${notes.map((s) => '<p>' + s + '</p>').join('')}` };
+}
+async function handleImport(file) {
+  const what = impWhat; if (!file || !what) return;
+  impMsg[what] = { cls: '', html: 'Reading ' + esc(file.name) + '…' }; buildInputs();
+  try {
+    const sheets = await readSheets(file), snap = JSON.stringify(S);
+    const res = what === 'cash' ? importCash(sheets) : what === 'fds' ? importFDs(sheets) : importFlows(sheets);
+    if (res.ok) impUndo = { what, snap };
+    impMsg[what] = { cls: res.ok && !res.warn ? '' : 'warn', html: '<span class="small">' + esc(file.name) + '</span><br>' + res.html };
+  } catch (e) {
+    impMsg[what] = { cls: 'warn', html: e && e.message === 'load'
+      ? 'The Excel reader could not be loaded. It is fetched from cdnjs.cloudflare.com the first time you import, so check the internet connection, or save the sheet as CSV and import that.'
+      : 'Could not read ' + esc(file.name) + '. ' + esc(e && e.message || '') };
+  }
+  buildInputs(); refresh();
+}
+async function downloadTemplate(what) {
+  const X = await loadXLSX();
+  const D = (iso) => { const m = parseISO(iso); if (!isFinite(m)) return null; const d = new Date(m); return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()); };
+  let rows, sheet;
+  if (what === 'cash') {
+    sheet = 'Cash position';
+    rows = [['Item', 'Value'], ['As of date', D(S.startDate)], ['Current account balance (₹ lakh)', S.opening], ['Safety buffer (₹ lakh)', S.buffer],
+      ['Planning horizon (days)', S.planDays], ['Review every (days)', S.review], ['Smallest deposit (₹ lakh)', S.minTicket], ['Deposit rounding (₹ lakh)', S.lot],
+      ['Tax on interest (%)', S.tax], ['Receipts late by (days), stress', S.delay]];
+  } else if (what === 'fds') {
+    sheet = 'Existing FDs';
+    rows = [['FD number', 'Bank', 'Principal (₹ lakh)', 'Rate % p.a.', 'Start date', 'Maturity date']].concat(S.fds.map((f) => [f.label, f.provider, f.amt, f.rate, D(f.start), D(f.mat)]));
+  } else {
+    sheet = 'Inflows and outflows';
+    rows = [['Event', 'Type', 'Repeats', 'Amount (₹ lakh)', '± %', 'Days', 'Concentrated %', 'Months', 'Date (one-time)']].concat(S.flows.map((f) => isOnce(f)
+      ? [f.name, f.type === 'in' ? 'Inflow' : 'Outflow', 'One time', f.amt, f.pct, null, null, null, D(onceDate(f))]
+      : [f.name, f.type === 'in' ? 'Inflow' : 'Outflow', 'Monthly', f.amt, f.pct, f.days, f.conc, f.months, null]));
+  }
+  const ws = X.utils.aoa_to_sheet(rows, { cellDates: true, dateNF: 'yyyy-mm-dd' }), wb = X.utils.book_new();
+  ws['!cols'] = rows[0].map((h, i) => ({ wch: i === 0 ? 36 : 16 }));
+  X.utils.book_append_sheet(wb, ws, sheet);
+  X.writeFile(wb, 'FD planner - ' + sheet.toLowerCase() + '.xlsx');
+}
+
+/* ---------- state, compute, render ---------- */
+function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* storage unavailable */ } }
+function load() { try { const j = JSON.parse(localStorage.getItem(KEY) || 'null'); if (j && j.flows && j.inst && j.fds && j.providers) S = Object.assign(EXAMPLE(), j); } catch (e) { /* ignore */ } }
+function refresh() {
+  const ae = document.activeElement, keep = ae && ae.id && ae.closest && ae.closest('#tab-validation') ? ae.id : null;
+  M = computeModel(S); renderSummary(M); renderTab(); save();
+  if (keep && $(keep)) { const n = $(keep); n.focus(); try { n.setSelectionRange(n.value.length, n.value.length); } catch (e) { /* not a text field */ } }
+}
+function drawPrev() {
+  const el = $('chPrev'); if (!el || !M) return;
+  cashChart(el, M, true, 210); $('prevCap').innerHTML = fdCaption(M);
+}
+function renderTab() {
+  if (!M) return;
+  if (tab === 'plan') renderPlan(M); else if (tab === 'validation') renderValidation(M); else if (tab === 'inputs') drawPrev();
+}
+function schedule() { clearTimeout(timer); timer = setTimeout(refresh, 140); }
+function showTab(t) {
+  tab = t;
+  ['plan', 'inputs', 'validation'].forEach((k) => { $('tab-' + k).hidden = k !== t; $('b-' + k).setAttribute('aria-selected', k === t ? 'true' : 'false'); });
+  if (t === 'inputs' && !$('tab-inputs').firstChild) buildInputs();
+  renderTab();
+  try { history.replaceState(null, '', '#' + t); } catch (e) { /* ignore */ }
+}
+function bufMonth() {
+  let tot = 0;
+  S.flows.forEach((f) => {
+    if (f.type !== 'out' || isOnce(f) || /\d{4}-\d{2}-\d{2}/.test(f.days)) return;
+    const ms = String(f.months || 'all').trim().toLowerCase(), occ = (ms === 'all' || ms === '') ? 12 : ms.split(/[ ,]+/).filter(Boolean).length;
+    tot += (+f.amt || 0) * (1 + (+f.pct || 0) / 100) * occ / 12;
+  });
+  S.buffer = Math.round(tot * 10) / 10;
+}
+function onField(e) {
+  const el = e.target, t = el.dataset.t;
+  if (el.id === 'impFile') { if (e.type === 'change') handleImport(el.files && el.files[0]); return; }
+  if (el.dataset.imode) { impMode[el.dataset.imode] = el.value; return; }
+  if (!t) return;
+  const i = +el.dataset.i, k = el.dataset.k;
+  let v = el.type === 'checkbox' ? el.checked : (el.dataset.n ? (parseFloat(el.value) || 0) : el.value);
+  if (t === 'S') S[k] = v; else S[t][i][k] = v;
+  if (t === 'flows' && k === 'freq') {
+    const f = S.flows[i], d = String(f.days || '').trim();
+    if (v === 'once' && !isoTok(f.date || '')) f.date = isoTok(d) ? d : S.startDate;
+    if (v === 'monthly' && isoTok(d)) f.days = '15';
+    if (e.type === 'change') buildInputs();
+  }
+  schedule();
+}
+function onClick(e) {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.tab) { showTab(b.dataset.tab); return; }
+  const a = b.dataset.act; if (!a) return;
+  const prov = S.providers[0] ? S.providers[0].name : 'ICICI Bank';
+  if (a === 'csv') {
+    const txt = csvOf(M), msg = $('csvmsg');
+    const fallback = () => { $('csvbox').innerHTML = '<textarea class="csv" readonly id="csvta" aria-label="Plan as CSV"></textarea>'; const ta = $('csvta'); ta.value = txt; ta.focus(); ta.select(); msg.textContent = 'Copy the text below.'; };
+    try { navigator.clipboard.writeText(txt).then(() => { msg.textContent = 'Copied.'; }, fallback); } catch (err) { fallback(); }
+    return;
+  }
+  if (a === 'imp') { impWhat = b.dataset.what; const fi = $('impFile'); fi.value = ''; fi.click(); return; }
+  if (a === 'tpl') {
+    const w = b.dataset.what;
+    downloadTemplate(w).catch(() => { impMsg[w] = { cls: 'warn', html: 'The Excel writer could not be loaded from cdnjs.cloudflare.com. Check the internet connection and try again.' }; buildInputs(); });
+    return;
+  }
+  if (a === 'undo') {
+    if (impUndo) { S = Object.assign(EXAMPLE(), JSON.parse(impUndo.snap)); impMsg[impUndo.what] = { cls: '', html: 'Import undone. The table is back to how it was.' }; impUndo = null; }
+    buildInputs(); refresh(); return;
+  }
+  if (a === 'reset') { S = EXAMPLE(); impUndo = null; Object.keys(impMsg).forEach((k) => delete impMsg[k]); buildInputs(); refresh(); return; }
+  if (a === 'bufmonth') { bufMonth(); buildInputs(); refresh(); return; }
+  if (a === 'del') { S[b.dataset.t].splice(+b.dataset.i, 1); }
+  else if (a === 'addfd') S.fds.push({ label: 'FD', provider: prov, amt: 50, rate: 6.5, start: S.startDate, mat: isoOf(parseISO(S.startDate) + 180 * DAY) });
+  else if (a === 'addflow') S.flows.push({ name: 'New event', type: 'out', freq: 'monthly', amt: 5, pct: 10, days: '15', conc: 100, months: 'all' });
+  else if (a === 'addonce') S.flows.push({ name: 'One-time event', type: 'out', freq: 'once', date: isoOf(parseISO(S.startDate) + 30 * DAY), amt: 50, pct: 0, days: '', conc: 100, months: 'all' });
+  else if (a === 'addstat') S.flows.push(...STAT_ROWS());
+  else if (a === 'addinst') S.inst.push({ on: true, provider: prov, type: 'FD', days: 180, rate: 6, pen: 1 });
+  else if (a === 'addprov') {
+    const n = $('newProv').value.trim();
+    if (n && !S.providers.some((p) => p.name === n)) S.providers.push({ name: n, cap: 0 });
+  }
+  buildInputs(); refresh();
+}
+let rz = null;
+function init() {
+  load();
+  document.addEventListener('input', onField); document.addEventListener('change', onField); document.addEventListener('click', onClick);
+  window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { renderTab(); }, 150); });
+  const h = (location.hash || '').replace('#', '');
+  try { buildInputs(); M = computeModel(S); renderSummary(M); }
+  catch (e) {
+    /* Saved inputs this version cannot read: start from the example rather than a blank page. */
+    S = EXAMPLE(); buildInputs(); M = computeModel(S); renderSummary(M);
+    $('boot').innerHTML = `<div class="note warn">Your saved inputs could not be loaded (${esc(e && e.message)}), so the example data is shown. Re-enter or re-import your figures in Inputs.</div>`;
+  }
+  showTab(['plan', 'inputs', 'validation'].includes(h) ? h : 'plan');
+}
+if (typeof document !== 'undefined') init();
+
+</script>
+
+</body></html>
